@@ -1,0 +1,61 @@
+#
+# Copyright (c) 2017, 2020 ADLINK Technology Inc.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# http://www.eclipse.org/legal/epl-2.0, or the Apache License, Version 2.0
+# which is available at https://www.apache.org/licenses/LICENSE-2.0.
+#
+# SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+#
+# Contributors:
+#   ADLINK zenoh team, <zenoh@adlink-labs.tech>
+#
+
+[package]
+name = "zenoh-fragmentation-e2e"
+version = "0.5.0-beta.8"
+repository = "https://github.com/Alez87/zenoh-fragmentation-e2e"
+homepage = "http://zenoh.io"
+authors = ["Alessandro <alessandrozanni.dev@gmail.com>"]
+edition = "2018"
+license = " EPL-2.0 OR Apache-2.0"
+categories = ["network-programming"]
+description = "Zenoh End-to-end Files Fragmentation."
+readme = "README.md"
+
+[package.metadata.deb]
+name = "zzenoh-fragmentation-e2e"
+maintainer = "zenoh-dev@eclipse.org"
+copyright = "2017, 2020 ADLINK Technology Inc."
+section = "net"
+license-file = ["LICENSE", "0"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zenoh = "0.5.0-beta.8"
+zenoh-util = "0.5.0-beta.8"
+async-std = "=1.9.0"
+futures = "0.3.12"
+clap = "2"
+log = "0.4"
+env_logger = "0.8.2"
+checksums = "0.7.1"
+memmap = "0.7.0"
+
+[lib]
+name = "fragmentation_e2e"
+crate-type = ["lib"]
+
+[[example]]
+name = "z_put_file"
+path = "examples/z_put_file.rs"
+
+[[example]]
+name = "z_get_file"
+path = "examples/z_get_file.rs"
+
+[[example]]
+name = "z_eval_file"
+path = "examples/z_eval_file.rs"
