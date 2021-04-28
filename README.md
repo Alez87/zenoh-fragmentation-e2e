@@ -12,8 +12,6 @@ See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more de
 This library is advisable for sending large files because it allows to fragment and reconstruct as less as we can: at source and at destination.
 It's a library that relies on zenoh and shares files on zenoh in order to avoid the h2h fragemntation.
 
-:point_right: **Download:** https://download.eclipse.org/zenoh/zenoh-fragmentation-e2e/
-
 -------------------------------
 
 ## **Prerequisites**
