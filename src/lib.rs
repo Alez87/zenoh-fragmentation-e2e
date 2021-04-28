@@ -164,8 +164,6 @@ pub async fn get_e2e(
                 //let full_filename = format!("{}/{}", root_folder_chunks, filename_num);
                 //write_file(chunk_content.to_vec(), full_filename);
                 write_mmap_file(&final_file, chunk_content.to_vec(), chunk_num, chunk_size);
-                //start_eval(): quando ho il file intero o quando ho un chunk?
-                //se quando ho il chunk allora come gestisco quando il chunk size cambia?
             }
         }
 

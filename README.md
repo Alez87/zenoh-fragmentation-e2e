@@ -6,11 +6,12 @@
 
 # Fragmentation system for Eclipse zenoh
 
-Zenoh uses an hop-to-hop fragmentation approach, typical of the Name Data Networking (NDN) concept. Although, generally, this is good approach, in some cases, i.e. when dealing with large files, in particular when intermediate nodes may also consider constraint devices, a different approach may be more suitable in order to minimize the number of fragmentation/reconstrcutions. 
+Zenoh uses an hop-to-hop fragmentation approach, typical of the Name Data Networking (NDN) concept. Although, generally, this is good approach, in some cases, i.e. when dealing with large files, in particular when intermediate nodes may also consider constraint devices, a different approach may be more suitable in order to minimize the number of fragmentation/reconstrcutions.
+
 See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more details.
 
-This library is advisable for sending large files because it allows to fragment and reconstruct as less as we can: at source and at destination.
-It's a library that relies on zenoh and shares files on zenoh in order to avoid the h2h fragemntation.
+This library is advisable for sending large files because it allows to fragment and reconstruct as less as it can: at source and at destination.
+It's a library that relies on zenoh and shares files on zenoh in order to avoid the h2h fragmentation.
 
 -------------------------------
 
@@ -124,7 +125,7 @@ Install and use this toolchain with the following command:
 $ rustup default nightly-2021-03-15
 ```
 
-And then build the backend with:
+And then build the library with:
 
 ```bash
 $ cargo build --release --all-targets

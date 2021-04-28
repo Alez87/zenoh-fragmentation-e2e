@@ -27,8 +27,6 @@ use std::{
 
 const ROOT_FOLDER: &str = "/tmp";
 
-//TODO: add struct with {chunk_size, root_folder}
-
 pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usize) -> Vec<u8> {
     let full_filename = format!("{}/{}", ROOT_FOLDER, filename);
     println!(
