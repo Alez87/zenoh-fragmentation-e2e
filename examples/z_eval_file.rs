@@ -20,9 +20,6 @@ use zenoh::Properties;
 
 #[async_std::main]
 async fn main() {
-    // initiate logging
-    env_logger::init();
-
     let (config, path) = parse_args();
 
     let chunk_size: usize = 65_000;

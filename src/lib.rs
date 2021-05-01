@@ -25,22 +25,23 @@ use std::{
 };
 use zenoh::*;
 use futures::prelude::*;
+use log::{info, warn, error};
 
 const ROOT_FOLDER: &str = "/tmp";
 
 /// The API to share a file.
 pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size: usize) {
-    println!("New zenoh...");
+    info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await.unwrap();
 
-    println!("New workspace...");
+    info!("New workspace...");
     let workspace = zenoh.workspace(None).await.unwrap();
 
     let file_metadata = fs::metadata(&value).expect("unable to read metadata");
     let file_size = file_metadata.len() as usize;
 
     if file_size <= chunk_size {
-        println!("Put Data ('{}': '{}')...\n", path, value);
+        info!("Put Data ('{}': '{}')...\n", path, value);
         workspace
             .put(&path.try_into().unwrap(), value.into())
             .await
@@ -51,19 +52,16 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
         let source = value.clone();
         let destination = format!("{}/{}", ROOT_FOLDER, filename);
         std::fs::copy(source, destination).expect("Cannot copy the file.");
-        println!(
-            "Copied file from {} to {}.",
-            value,
-            format!("{}/{}", ROOT_FOLDER, filename)
+        info!("Copied file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename)
         );
 
         let file_type = file_metadata.file_type();
-        println!("\nFile size: {}", file_size);
-        println!("File type: {:?}", file_type);
+        info!("\nFile size: {}", file_size);
+        info!("File type: {:?}", file_type);
 
         let input = Path::new(&value);
         let checksum = checksums::hash_file(input, checksums::Algorithm::SHA2256);
-        println!("Checksum: {:?}", checksum);
+        info!("Checksum: {:?}", checksum);
 
         let chunks_number: usize = file_size / chunk_size + 1;
         let metadata_path: String = format!("{}/metadata", path);
@@ -71,8 +69,8 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
             "size: {}, checksum: {}, chunks_number: {}, chunk_size: {}, file_type: {:?}",
             file_size, checksum, chunks_number, chunk_size, file_type
         );
-        println!("Selector: {}", metadata_path);
-        println!("Size metadata: {}", metadata.len());
+        info!("Selector: {}", metadata_path);
+        info!("Size metadata: {}", metadata.len());
         workspace
             .put(&metadata_path.try_into().unwrap(), metadata.into())
             .await
@@ -88,26 +86,26 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
 pub async fn get_e2e(
     config: Properties,
     selector: String,
-    /*root_folder_chunks: &str,*/ root_folder_final: String,
+    root_folder_final: String,
     index_start: String,
     index_end: String,
     chunk_index_start: String,
     chunk_index_end: String,
 ) {
-    println!("New zenoh...");
+    info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await.unwrap();
 
-    println!("New workspace...");
+    info!("New workspace...");
     let workspace = zenoh.workspace(None).await.unwrap();
 
     let old_selector = selector.clone();
-    println!("Get Data from {}'...\n", selector);
+    info!("Get Data from {}'...\n", selector);
     let mut data_stream = workspace.get(&selector.try_into().unwrap()).await.unwrap();
 
     let mut found_selector = false;
     while let Some(data) = data_stream.next().await {
         found_selector = true;
-        println!(
+        info!(
             "  {} : {:?} (encoding: {} , timestamp: {})",
             data.path,
             data.value,
@@ -117,7 +115,7 @@ pub async fn get_e2e(
     }
     if !found_selector {
         let metadata_selector = format!("{}/metadata", old_selector);
-        println!("Metadata selector: {}", metadata_selector);
+        info!("Metadata selector: {}", metadata_selector);
         let mut data_stream = workspace
             .get(&metadata_selector.try_into().unwrap())
             .await
@@ -126,7 +124,10 @@ pub async fn get_e2e(
         while let Some(data) = data_stream.next().await {
             metadata = match data.value {
                 Value::StringUtf8(s) => s,
-                _ => panic!("Error"),
+                _ => {
+                        error!("Cannot read the data [StringUtf8 expected]."); 
+                        panic!("Error");
+                    },
             };
         }
 
@@ -147,7 +148,7 @@ pub async fn get_e2e(
 
         for chunk_num in chunk_start..chunk_end + 1 {
             let chunk_selector = format!("{}/{}", old_selector, chunk_num);
-            println!(
+            info!(
                 "\nElaborating chunk number {}. Calling EVAL {}.",
                 chunk_num, chunk_selector
             );
@@ -158,7 +159,10 @@ pub async fn get_e2e(
             while let Some(data) = data_stream.next().await {
                 let chunk_content: RBuf = match data.value.clone() {
                     Value::Raw(_, buff) => buff,
-                    _ => panic!("Not the data expected."),
+                    _ => {
+                            error!("Not the data expected [RBuff required]."); 
+                            panic!("Not the data expected.")
+                        },
                 };
                 //let filename_num = format!("{}_{}", &filename, chunk_num);
                 //let full_filename = format!("{}/{}", root_folder_chunks, filename_num);
@@ -171,15 +175,12 @@ pub async fn get_e2e(
         if count_chunks == chunks_number {
             let checksum_ok = check_checksum(checksum, &path);
             if !checksum_ok {
-                println!("Checksum verified -> ERROR. Please try to download the file again.");
+                error!("Checksum verified -> ERROR. Please try to download the file again.");
             } else {
-                println!("Checksum verified -> OK");
+                info!("Checksum verified -> OK");
             }
         } else {
-            println!(
-                "{} chunks missing. Check them to recrete the whole file.",
-                count_chunks
-            );
+            warn!("{} chunks missing. Check them to recrete the whole file.", count_chunks);
         }
     }
     zenoh.close().await.unwrap();
@@ -190,17 +191,17 @@ pub async fn run_eval_e2e(config: Properties, path_str: String, chunk_size: usiz
     let path: zenoh::Path = zenoh::Path::try_from(path_str.clone()).unwrap();
     let path_expr = PathExpr::try_from(path_str.clone()).unwrap();
 
-    println!("New zenoh...");
+    info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await.unwrap();
 
-    println!("New workspace...");
+    info!("New workspace...");
     let workspace = zenoh.workspace(None).await.unwrap();
 
-    println!("Register eval for {}'...\n", path_str);
+    info!("Register eval for {}'...\n", path_str);
     let mut get_stream = workspace.register_eval(&path_expr).await.unwrap();
     while let Some(get_request) = get_stream.next().await {
         let selector = get_request.selector.clone();
-        println!(
+        info!(
             ">> [Eval listener] received get with selector: {}",
             selector
         );
@@ -213,7 +214,7 @@ pub async fn run_eval_e2e(config: Properties, path_str: String, chunk_size: usiz
             .unwrap();
 
         let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
-        println!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
+        info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
         get_request.reply(path.clone(), chunk_bytes.into()).await;
     }
     get_stream.close().await.unwrap();
@@ -237,10 +238,8 @@ async fn eval(path: String, chunk_number: usize, chunk_size: usize) {
     let mut config = Properties::default();
     config.insert("-m".to_string(), "peer".to_string());
     let eval_path = format!("{}/{}", path, chunk_number);
-    println!(
-        "\nRunning Eval {} on path {} with config {:?}",
-        chunk_number, eval_path, config
+    info!("\nRunning Eval {} on path {} with config {:?}", chunk_number, eval_path, config
     );
     run_eval_e2e(config.clone(), eval_path, chunk_size).await;
-    println!("\nFinished Eval {}", chunk_number);
+    info!("\nFinished Eval {}", chunk_number);
 }

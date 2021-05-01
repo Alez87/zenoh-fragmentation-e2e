@@ -33,8 +33,8 @@ pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usiz
         "Getting the file {}, chunk number {}.",
         full_filename, chunk_number
     );
-    let mut f = File::open(&full_filename).expect("no file found"); //TODO: più sys call ogni volta
-    let metadata = fs::metadata(&full_filename).expect("unable to read metadata");
+    let mut f = File::open(&full_filename).expect("No file found");
+    let metadata = fs::metadata(&full_filename).expect("Unable to read metadata");
     let file_size = metadata.len() as usize;
 
     let offset: usize = (chunk_number - 1) * chunk_size;

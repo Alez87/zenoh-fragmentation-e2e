@@ -20,10 +20,9 @@ use zenoh::Properties;
 
 #[async_std::main]
 async fn main() {
-    env_logger::init();
-
     let (config, path, value, chunk_size) = parse_args();
 
+    println!("Calling the PUT API to share the file...");
     put_e2e(config, path, value, chunk_size).await;
 }
 

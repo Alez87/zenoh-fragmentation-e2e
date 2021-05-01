@@ -20,14 +20,10 @@ use zenoh::Properties;
 
 #[async_std::main]
 async fn main() {
-    env_logger::init();
-
     let (config, selector, root_folder, index_start, index_end, chunk_index_start, chunk_index_end) =
         parse_args();
 
-    //let root_folder: &str = "/tmp/final";
-    //let root_folder_chunks: &str = "/tmp/chunks";
-    //get_e2e(config, selector, root_folder_chunks, root_folder_final, index_start, index_end, chunk_index_start, chunk_index_end).await;
+    println!("Calling the GET API to retrieve the file...");
     get_e2e(
         config,
         selector,
