@@ -23,7 +23,11 @@ async fn main() {
     let (config, path) = parse_args();
 
     let chunk_size: usize = 65_000;
-    run_eval_e2e(config, path, chunk_size).await;
+    let res: String = match run_eval_e2e(config, path, chunk_size).await {
+        Ok(_) => String::from("Finished Eval."),
+        Err(e) => format!("Error during the Eval: {:?}.", e)
+    };
+    println!("{}", res);
 }
 
 #[allow(dead_code)]

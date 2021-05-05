@@ -23,17 +23,23 @@ async fn main() {
     let (config, selector, root_folder, index_start, index_end, chunk_index_start, chunk_index_end) =
         parse_args();
 
+    let root_folder_chunks: &str = "/tmp/chunks";
+
     println!("Calling the GET API to retrieve the file...");
-    get_e2e(
+    let res: String = match get_e2e(
         config,
         selector,
         root_folder,
+        root_folder_chunks,
         index_start,
         index_end,
         chunk_index_start,
         chunk_index_end,
-    )
-    .await;
+    ).await {
+        Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
+        Err(e) => format!("Error during the Get: {:?}.", e)
+    };
+    println!("{}", res);
 }
 
 fn parse_args() -> (Properties, String, String, String, String, String, String) {

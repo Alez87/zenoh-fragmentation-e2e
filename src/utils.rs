@@ -23,13 +23,17 @@ use std::{
 use std::{
     io::{Read, Write},
     u64,
+    error::Error,
 };
+use std::fs::create_dir_all;
+use log::{info, warn, error};
+use memmap::MmapOptions;
 
 const ROOT_FOLDER: &str = "/tmp";
 
 pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usize) -> Vec<u8> {
     let full_filename = format!("{}/{}", ROOT_FOLDER, filename);
-    println!(
+    info!(
         "Getting the file {}, chunk number {}.",
         full_filename, chunk_number
     );
@@ -39,14 +43,14 @@ pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usiz
 
     let offset: usize = (chunk_number - 1) * chunk_size;
     let real_offset = f.seek(SeekFrom::Start(offset as u64));
-    println!(
+    info!(
         "The offset I'd like is {} and the real offset is {:?}.",
         offset, real_offset
     );
 
     let missing_bytes = file_size - offset;
     let buffer_len: usize = missing_bytes.min(chunk_size);
-    println!(
+    info!(
         "File size {}, missing_bytes {}. I create a vector of {} bytes.",
         file_size, missing_bytes, buffer_len
     );
@@ -56,11 +60,11 @@ pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usiz
     buffer
 }
 
-pub fn get_metadata_info(
+pub fn get_metadata_info (
     metadata: String,
     old_selector: String,
-) -> (usize, String, usize, usize, String) {
-    println!("\nMetadata {:?}", metadata);
+) -> Result<(usize, String, usize, usize, String), Box<dyn Error>> {
+    info!("\nMetadata {:?}", metadata);
 
     let metadata_split: Vec<_> = metadata.split(", ").collect();
     let metadata_size: Vec<_> = metadata_split[0].split(": ").collect();
@@ -69,19 +73,56 @@ pub fn get_metadata_info(
     let metadata_chunk_size: Vec<_> = metadata_split[3].split(": ").collect();
     let selector_split: Vec<_> = old_selector.split('/').collect();
 
-    let size: usize = metadata_size[1].parse::<usize>().unwrap();
-    let checksum: String = metadata_checksum[1].parse::<String>().unwrap();
-    let chunks_number: usize = metadata_chunks_number[1].parse::<usize>().unwrap();
-    let chunk_size: usize = metadata_chunk_size[1].parse::<usize>().unwrap();
-    let filename = String::from(selector_split[selector_split.len() - 1]);
-    println!("\nFile size: {}", size);
-    println!("Checksum: {}", checksum);
-    println!("Chunks_number: {}", chunks_number);
-    println!("Chunk size: {}", chunk_size);
-    println!("Filename: {}\n", filename);
+    let size: usize = match metadata_size[1].parse::<usize>() {
+        Ok(s) => {
+            info!("File size: {}", s);
+            s
+        },
+        Err(e) => {
+            error!("Cannot find the file size.");
+            return Err(e.into())
+        }
+    };
+    
+    let checksum: String = match metadata_checksum[1].parse::<String>() {
+        Ok(s) => {
+            info!("File size: {}", s);
+            s
+        },
+        Err(e) => {
+            error!("Cannot find the file size.");
+            return Err(e.into())
+        }
+    };
+    
+    let chunks_number: usize = match metadata_chunks_number[1].parse::<usize>() {
+        Ok(s) => {
+            info!("Chunks number: {}", s);
+            s
+        },
+        Err(e) => {
+            error!("Cannot find the number of chunks.");
+            return Err(e.into())
+        }
+    };
 
-    (size, checksum, chunks_number, chunk_size, filename)
+    let chunk_size: usize = match metadata_chunk_size[1].parse::<usize>() {
+        Ok(s) => {
+            info!("Chunks size: {}", s);
+            s
+        },
+        Err(e) => {
+            error!("Cannot find the size of the chunks.");
+            return Err(e.into())
+        }
+    };
+
+    let filename = String::from(selector_split[selector_split.len() - 1]);
+    info!("Filename: {}\n", filename);
+
+    Ok((size, checksum, chunks_number, chunk_size, filename))
 }
+
 
 pub fn get_chunks_interval(
     chunks_number: usize,
@@ -90,86 +131,141 @@ pub fn get_chunks_interval(
     index_end: String,
     chunk_index_start: String,
     chunk_index_end: String,
-) -> (usize, usize) {
+) -> Result<(usize, usize), Box<dyn Error>> {
     let mut chunk_start: usize = 0;
     let mut chunk_end: usize = chunks_number;
-    println!(
+    info!(
         "Indeces: bytes start-{}, bytes end-{}, chunk_start-{}, chunk_end-{}",
         index_start, index_end, chunk_index_start, chunk_index_end
     );
 
-    let index_start_num = index_start.parse::<usize>().unwrap();
-    let index_end_num = index_end.parse::<usize>().unwrap();
-    let chunk_index_start_num = chunk_index_start.parse::<usize>().unwrap();
-    let chunk_index_end_num = chunk_index_end.parse::<usize>().unwrap();
+    let index_start_num = index_start.parse::<usize>()?;
+    let index_end_num = index_end.parse::<usize>()?;
+    let chunk_index_start_num = chunk_index_start.parse::<usize>()?;
+    let chunk_index_end_num = chunk_index_end.parse::<usize>()?;
 
     if index_start_num > index_end_num {
-        panic!("Wrong bytes interval specified.");
+        return Err("Wrong bytes interval specified.".into());
     } else if chunk_index_start_num > chunk_index_end_num {
-        panic!("Wrong chunks interval specified.");
+        return Err("Wrong chunks interval specified.".into());
     } else if index_end_num != 0 {
         chunk_start = index_start_num / chunk_size + 1;
         let chunk_end_raw = index_end_num / chunk_size + 1;
         chunk_end = chunk_end_raw.min(chunks_number);
-        println!(
+        info!(
             "Bytes decision: chunk start {}, chunk end {}",
             chunk_start, chunk_end
         );
     } else if chunk_index_end_num != 0 {
         chunk_start = chunk_index_start_num;
         chunk_end = chunk_index_end_num.min(chunks_number);
-        println!(
+        info!(
             "Chunks decision: chunk start {}, chunk end {}",
             chunk_start, chunk_end
         );
     }
-    (chunk_start, chunk_end)
+    Ok((chunk_start, chunk_end))
 }
 
-pub fn create_mmap_file(path: String, size: u64) -> File {
-    let mut f = OpenOptions::new()
+/*
+pub fn copy_file_to_destination(source: String, destination: String, value: String, filename: &str, path_chunks: &str, path_final: &str) -> Result<(), Box<dyn Error>>{
+    match copy(source.clone(), destination.clone()) {
+        Ok(_) => println!("Copied file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename)),
+        Err(_) => {
+            println!("Cannot copy the file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename));
+            println!("Checking the folder needed...");
+            create_dir_all(format!("{}{}", ROOT_FOLDER, path_chunks))?;
+            create_dir_all(format!("{}{}", ROOT_FOLDER, path_final))?;
+            println!("Created the folders: {}, {}.", path_chunks, path_final);
+            match copy(source, destination) {
+                Ok(_) => println!("Copied file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename)),
+                Err(e) => {
+                    println!("Cannot copy, again, the file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename));
+                    return Err(e.into());
+                }
+            }
+        }
+    };
+    Ok(())
+}
+*/
+
+pub fn create_mmap_file(path: String, root_folder_final: String, size: u64) -> Result<File, Box<dyn Error>> {
+    let mut f = match OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open(path)
-        .expect("Unable to open file");
+        .open(path.clone()) {
+            Ok(f) => f,
+            Err(_) => {
+                println!("Cannot create the file {}.", path);
+                println!("Checking if the folder {} exists.", root_folder_final);
+                create_dir_all(&root_folder_final)?;
+                println!("Created the folder {}.", root_folder_final);
+                match OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(path.clone()) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        println!("Cannot create, again, the file {}.", path);
+                        return Err(e.into());
+                    }
+                }
+            }
+    };
 
     // Allocate space in the file first
-    f.seek(SeekFrom::Start(size - 1)).unwrap();
-    f.write_all(&[0]).unwrap();
-    f.seek(SeekFrom::Start(0)).unwrap();
-    f
+    f.seek(SeekFrom::Start(size - 1))?;
+    f.write_all(&[0])?;
+    f.seek(SeekFrom::Start(0))?;
+    Ok(f)
 }
+
 
 pub fn write_mmap_file(f: &File, src: Vec<u8>, chunk_num: usize, chunk_size: usize) {
     let mut data = unsafe {
-        memmap::MmapOptions::new()
+        MmapOptions::new()
             .map_mut(f)
             .expect("Could not access data from memory mapped file")
     };
-
     let initial_position: usize = (chunk_num - 1) * chunk_size;
     let final_position: usize = initial_position + src.len();
-    //data[..src.len()].copy_from_slice(&src);
-    println!(
+    info!(
         "Write from position {} to position {}.",
         initial_position, final_position
     );
     data[initial_position..final_position].copy_from_slice(&src);
 }
+    
 
-/*
-fn write_file(all_bytes: Vec<u8>, filename: String) -> () {
-    //let full_filename = format!("{}/{}", ROOT_FOLDER_CHUNKS, filename_num);
-    let mut f = File::create(filename.clone()).expect("Unable to create file");
+pub fn write_file(root_folder_chunks: &str, all_bytes: Vec<u8>, filename: String) -> Result<(), Box<dyn Error>> {
+    //let mut f = File::create(filename.clone()).expect("Unable to create file");
+    let mut f = match File::create(filename.clone()) {
+        Ok(f) => f,
+        Err(_) => {
+            warn!("Cannot create the file {}.", filename);
+            warn!("Checking if the folder {} exists...", root_folder_chunks);
+            create_dir_all(root_folder_chunks)?;
+            warn!("Created the folder {}.", root_folder_chunks);
+            match File::create(filename.clone()) {
+                Ok(f) => f,
+                Err(e) => {
+                    error!("Cannot create, again, the file {}.", filename);
+                    return Err(e.into());
+                }
+            }
+        }
+    };
     f.write_all(&all_bytes).expect("Unable to write data");
-    println!("Created file: {:?}", filename);
+    info!("Created file: {:?}", filename);
+    Ok(())
 }
-*/
 
 pub fn check_checksum(checksum_old: String, file: &str) -> bool {
     let checksum_new = checksums::hash_file(Path::new(file), checksums::Algorithm::SHA2256);
-    println!("\nChecksum old: {}", checksum_old);
-    println!("Checksum new: {}", checksum_new);
+    info!("\nChecksum old: {}", checksum_old);
+    info!("Checksum new: {}", checksum_new);
     checksum_old.eq(&checksum_new)
 }

@@ -23,7 +23,11 @@ async fn main() {
     let (config, path, value, chunk_size) = parse_args();
 
     println!("Calling the PUT API to share the file...");
-    put_e2e(config, path, value, chunk_size).await;
+    let res: String = match put_e2e(config, path, value, chunk_size).await {
+        Ok(_) => String::from("Finished to retrieve the file."),
+        Err(e) => format!("Error during the Put: {:?}.", e)
+    };
+    println!("{}", res);
 }
 
 fn parse_args() -> (Properties, String, String, usize) {
