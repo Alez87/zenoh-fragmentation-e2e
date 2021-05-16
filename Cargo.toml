@@ -59,3 +59,7 @@ path = "examples/z_get_file.rs"
 [[example]]
 name = "z_eval_file"
 path = "examples/z_eval_file.rs"
+
+[[test]]
+name = "tests"
+path = "tests/unit_tests.rs"
