@@ -80,7 +80,7 @@ mod tests_get {
         assert_eq!(Err(io::ErrorKind::NotFound), result);
     }
 
-    #[async_std::test]
+    #[ignore] #[async_std::test]
     async fn index_invalid() {
         let (config, selector, root_folder, root_folder_chunks, index_start, index_end, chunk_index_start, chunk_index_end) =
             common::setup_get("peer", "/demo/example/myfile", 2, 1, 0, 0);
@@ -89,7 +89,7 @@ mod tests_get {
         assert_eq!(Err(io::ErrorKind::Other), result);
     }
 
-    #[async_std::test]
+    #[ignore] #[async_std::test]
     async fn chunksindex_invalid() {
         let (config, selector, root_folder, root_folder_chunks, index_start, index_end, chunk_index_start, chunk_index_end) =
             common::setup_get("peer", "/demo/example/myfile", 0, 0, 2, 1);
