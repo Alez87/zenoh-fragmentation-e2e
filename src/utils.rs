@@ -165,33 +165,10 @@ pub fn get_chunks_interval(
         );
     }
 
-    println!("Chunk_start {}, chunk_end {}", chunk_start, chunk_end);
+    info!("Chunk_start {}, chunk_end {}", chunk_start, chunk_end);
 
     Ok((chunk_start, chunk_end))
 }
-
-/*
-pub fn copy_file_to_destination(source: String, destination: String, value: String, filename: &str, path_chunks: &str, path_final: &str) -> Result<(), Box<dyn Error>>{
-    match copy(source.clone(), destination.clone()) {
-        Ok(_) => println!("Copied file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename)),
-        Err(_) => {
-            println!("Cannot copy the file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename));
-            println!("Checking the folder needed...");
-            create_dir_all(format!("{}{}", ROOT_FOLDER, path_chunks))?;
-            create_dir_all(format!("{}{}", ROOT_FOLDER, path_final))?;
-            println!("Created the folders: {}, {}.", path_chunks, path_final);
-            match copy(source, destination) {
-                Ok(_) => println!("Copied file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename)),
-                Err(e) => {
-                    println!("Cannot copy, again, the file from {} to {}.", value, format!("{}/{}", ROOT_FOLDER, filename));
-                    return Err(e.into());
-                }
-            }
-        }
-    };
-    Ok(())
-}
-*/
 
 pub fn create_mmap_file(path: String, root_folder_final: String, size: u64) -> Result<File, Box<dyn Error>> {
     let mut f = match OpenOptions::new()
@@ -201,10 +178,10 @@ pub fn create_mmap_file(path: String, root_folder_final: String, size: u64) -> R
         .open(path.clone()) {
             Ok(f) => f,
             Err(_) => {
-                println!("Cannot create the file {}.", path);
-                println!("Checking if the folder {} exists.", root_folder_final);
+                warn!("Cannot create the file {}.", path);
+                warn!("Checking if the folder {} exists.", root_folder_final);
                 create_dir_all(&root_folder_final)?;
-                println!("Created the folder {}.", root_folder_final);
+                info!("Created the folder {}.", root_folder_final);
                 match OpenOptions::new()
                     .read(true)
                     .write(true)
@@ -212,7 +189,7 @@ pub fn create_mmap_file(path: String, root_folder_final: String, size: u64) -> R
                     .open(path.clone()) {
                     Ok(f) => f,
                     Err(e) => {
-                        println!("Cannot create, again, the file {}.", path);
+                        error!("Cannot create, again, the file {}.", path);
                         return Err(e.into());
                     }
                 }

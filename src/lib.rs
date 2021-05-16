@@ -43,10 +43,10 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size.").into());
     }
 
-    println!("New zenoh...");
+    info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await?;
 
-    println!("New workspace...");
+    info!("New workspace...");
     let workspace = zenoh.workspace(None).await?;
 
     let file_metadata = match fs::metadata(&value) {
@@ -67,19 +67,19 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
         let source = value.clone();
         let destination = format!("{}/{}", ROOT_FOLDER, filename);
         match copy(source.clone(), destination.clone()) {
-            Ok(_) => println!("Copied file from {} to {}.", source, destination),
+            Ok(_) => info!("Copied file from {} to {}.", source, destination),
             Err(e) => {
-                println!("Cannot copy the file from {} to {}.", source, destination);
+                info!("Cannot copy the file from {} to {}.", source, destination);
                 return Err(e.into());
             }
         };
         let file_type = file_metadata.file_type();
-        println!("File size: {}", file_size);
-        println!("File type: {:?}", file_type);
+        info!("File size: {}", file_size);
+        info!("File type: {:?}", file_type);
 
         let input = Path::new(&value);
         let checksum = checksums::hash_file(input, checksums::Algorithm::SHA2256);
-        println!("Checksum: {:?}", checksum);
+        info!("Checksum: {:?}", checksum);
 
         let chunks_number: usize = file_size / chunk_size + 1;
         let metadata_path: String = format!("{}/metadata", path);
@@ -87,8 +87,8 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
             "size: {}, checksum: {}, chunks_number: {}, chunk_size: {}, file_type: {:?}",
             file_size, checksum, chunks_number, chunk_size, file_type
         );
-        println!("Selector: {}", metadata_path);
-        println!("Size metadata: {}", metadata.len());
+        info!("Selector: {}", metadata_path);
+        info!("Size metadata: {}", metadata.len());
         workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
         let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
@@ -188,11 +188,10 @@ pub async fn get_e2e (
                 };
                 let filename_num = format!("{}_{}", &filename, chunk_num);
                 let full_filename = format!("{}/{}", root_folder_chunks, filename_num);
-                write_file(root_folder_chunks, chunk_content.to_vec(), full_filename)?;
                 write_mmap_file(&final_file, chunk_content.to_vec(), chunk_num, chunk_size);
+                write_file(root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
             }
         }
-
         let count_chunks = chunk_end - chunk_start + 1;
         if count_chunks == chunks_number {
             let checksum_ok = check_checksum(checksum, &path);
@@ -204,6 +203,9 @@ pub async fn get_e2e (
         } else {
             warn!("{} chunks missing. Check them to recrete the whole file.", count_chunks);
         }
+
+        let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
+        call_eval(path.clone(), chunks_nums, chunk_size).await;
     }
     zenoh.close().await?;
     Ok(path_to_return)
