@@ -34,7 +34,7 @@ async fn main() {
         index_start,
         index_end,
         chunk_index_start,
-        chunk_index_end,
+        chunk_index_end
     ).await {
         Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
         Err(e) => format!("Error during the Get: {:?}.", e)

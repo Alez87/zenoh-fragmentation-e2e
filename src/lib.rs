@@ -24,18 +24,29 @@ use std::{
 };
 use zenoh::*;
 use futures::prelude::*;
-use std::error::Error;
 use std::fs::copy;
 use log::{info, warn, error};
+use std::io::ErrorKind;
+use std::error::Error;
 
 const ROOT_FOLDER: &str = "/tmp";
 
 /// The API to share a file.
 pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size: usize) -> Result<(), Box<dyn Error>> {
-    info!("New zenoh...");
+    if path.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
+    }
+    if value.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Value is empty.").into());
+    }
+    if chunk_size < 100 {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size.").into());
+    }
+
+    println!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await?;
 
-    info!("New workspace...");
+    println!("New workspace...");
     let workspace = zenoh.workspace(None).await?;
 
     let file_metadata = match fs::metadata(&value) {
@@ -63,12 +74,12 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
             }
         };
         let file_type = file_metadata.file_type();
-        info!("File size: {}", file_size);
-        info!("File type: {:?}", file_type);
+        println!("File size: {}", file_size);
+        println!("File type: {:?}", file_type);
 
         let input = Path::new(&value);
         let checksum = checksums::hash_file(input, checksums::Algorithm::SHA2256);
-        info!("Checksum: {:?}", checksum);
+        println!("Checksum: {:?}", checksum);
 
         let chunks_number: usize = file_size / chunk_size + 1;
         let metadata_path: String = format!("{}/metadata", path);
@@ -76,8 +87,8 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
             "size: {}, checksum: {}, chunks_number: {}, chunk_size: {}, file_type: {:?}",
             file_size, checksum, chunks_number, chunk_size, file_type
         );
-        info!("Selector: {}", metadata_path);
-        info!("Size metadata: {}", metadata.len());
+        println!("Selector: {}", metadata_path);
+        println!("Size metadata: {}", metadata.len());
         workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
         let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
@@ -98,6 +109,10 @@ pub async fn get_e2e (
     chunk_index_start: String,
     chunk_index_end: String,
 ) -> Result<String, Box<dyn Error>> {
+    if selector.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Selector is empty.").into());
+    }
+    
     info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await?;
 
@@ -133,6 +148,10 @@ pub async fn get_e2e (
                         return Err("Cannot read the data [StringUtf8 expected].".into())
                     },
             };
+        }
+
+        if metadata.is_empty() {
+            return Err(std::io::Error::new(ErrorKind::NotFound, "Metadata information not found.").into());
         }
 
         let (size, checksum, chunks_number, chunk_size, filename) =
@@ -192,6 +211,12 @@ pub async fn get_e2e (
 
 /// The API to retrieve bytes related the chunks
 pub async fn run_eval_e2e(config: Properties, path_str: String, chunk_size: usize) -> Result<(), Box<dyn Error>> {
+    if path_str.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
+    }
+    if 0 == chunk_size {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Chunk size is zero.").into());
+    }
     let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
     let path_expr = PathExpr::try_from(path_str.clone())?;
 

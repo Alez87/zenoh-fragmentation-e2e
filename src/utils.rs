@@ -164,6 +164,9 @@ pub fn get_chunks_interval(
             chunk_start, chunk_end
         );
     }
+
+    println!("Chunk_start {}, chunk_end {}", chunk_start, chunk_end);
+
     Ok((chunk_start, chunk_end))
 }
 
