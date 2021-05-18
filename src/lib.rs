@@ -31,17 +31,39 @@ use std::error::Error;
 
 const ROOT_FOLDER: &str = "/tmp";
 
+pub struct PUTApiArgs {
+    pub chunk_size: usize
+ }
+
+pub struct GETApiChunksArgs {
+    pub index_start: usize,
+    pub index_end: usize,
+    pub chunk_index_start: usize,
+    pub chunk_index_end: usize
+ }
+
+pub struct GETApiFoldersArgs {
+    pub root_folder_final: &'static str,
+    pub root_folder_chunks: &'static str
+ }
+ pub struct EVALApiArgs {
+    pub chunk_size: usize
+ }
+
 /// The API to share a file.
-pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size: usize) -> Result<(), Box<dyn Error>> {
+pub async fn put_e2e(config: Properties, path: String, value: String, args: PUTApiArgs) -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+    
     if path.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
     }
     if value.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Value is empty.").into());
     }
-    if chunk_size < 100 {
+    if args.chunk_size < 100 {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size.").into());
-    }
+    } 
+    let chunk_size: usize = args.chunk_size;
 
     info!("New zenoh...");
     let zenoh = Zenoh::new(config.into()).await?;
@@ -98,17 +120,11 @@ pub async fn put_e2e(config: Properties, path: String, value: String, chunk_size
     Ok(())
 }
 
+
 /// The API to retrieve a shared file
-pub async fn get_e2e (
-    config: Properties,
-    selector: String,
-    root_folder_final: String,
-    root_folder_chunks: &str,
-    index_start: String,
-    index_end: String,
-    chunk_index_start: String,
-    chunk_index_end: String,
-) -> Result<String, Box<dyn Error>> {
+pub async fn get_e2e (config: Properties,selector: String, folder_args: GETApiFoldersArgs, bytes_args: GETApiChunksArgs) -> Result<String, Box<dyn Error>> {
+    env_logger::init();
+
     if selector.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Selector is empty.").into());
     }
@@ -160,15 +176,15 @@ pub async fn get_e2e (
         let (chunk_start, chunk_end) = get_chunks_interval(
             chunks_number,
             chunk_size,
-            index_start,
-            index_end,
-            chunk_index_start,
-            chunk_index_end,
+            bytes_args.index_start,
+            bytes_args.index_end,
+            bytes_args.chunk_index_start,
+            bytes_args.chunk_index_end,
         )?;
 
-        let path = format!("{}/{}", root_folder_final, &filename);
+        let path = format!("{}/{}", folder_args.root_folder_final, &filename);
         path_to_return = path.clone();
-        let final_file = create_mmap_file(path.clone(), root_folder_final, size as u64)?;
+        let final_file = create_mmap_file(path.clone(), folder_args.root_folder_final, size as u64)?;
 
         for chunk_num in chunk_start..chunk_end + 1 {
             let chunk_selector = format!("{}/{}", old_selector, chunk_num);
@@ -187,9 +203,9 @@ pub async fn get_e2e (
                         },
                 };
                 let filename_num = format!("{}_{}", &filename, chunk_num);
-                let full_filename = format!("{}/{}", root_folder_chunks, filename_num);
+                let full_filename = format!("{}/{}", folder_args.root_folder_chunks, filename_num);
                 write_mmap_file(&final_file, chunk_content.to_vec(), chunk_num, chunk_size);
-                write_file(root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
+                write_file(folder_args.root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
             }
         }
         let count_chunks = chunk_end - chunk_start + 1;
@@ -212,13 +228,16 @@ pub async fn get_e2e (
 }
 
 /// The API to retrieve bytes related the chunks
-pub async fn run_eval_e2e(config: Properties, path_str: String, chunk_size: usize) -> Result<(), Box<dyn Error>> {
+pub async fn run_eval_e2e(config: Properties, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
+    env_logger::init();
+
     if path_str.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
     }
-    if 0 == chunk_size {
+    if 0 == args.chunk_size {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Chunk size is zero.").into());
     }
+    let chunk_size = args.chunk_size;
     let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
     let path_expr = PathExpr::try_from(path_str.clone())?;
 
@@ -237,7 +256,6 @@ pub async fn run_eval_e2e(config: Properties, path_str: String, chunk_size: usiz
         let selector_to_split = format!("{}", selector);
         let selector_split: Vec<_> = selector_to_split.split('/').collect();
         let filename = selector_split[selector_split.len() - 2];
-        //let chunk_number = selector_split[selector_split.len() - 1].parse::<usize>()?;
         let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
             Ok(chunk_number)  => chunk_number,
             Err(e) => {
@@ -274,10 +292,8 @@ async fn eval(path: String, chunk_number: usize, chunk_size: usize) {
     let eval_path = format!("{}/{}", path, chunk_number);
     info!("Running Eval {} on path {} with config {:?}", chunk_number, eval_path, config
     );
-    let _ = match run_eval_e2e(config.clone(), eval_path, chunk_size).await {
+    let _ = match run_eval_e2e(config.clone(), eval_path, EVALApiArgs{chunk_size}).await {
         Ok(_) => info!("Finished Eval {}", chunk_number),
         Err(e) => error!("Error during the Eval: {}.", e)
     };
-    //run_eval_e2e(config.clone(), eval_path, chunk_size).await;
-    //info!("\nFinished Eval {}", chunk_number);
 }

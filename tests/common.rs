@@ -2,10 +2,9 @@
 /// 
 
 extern crate fragmentation_e2e;
-use fragmentation_e2e::put_e2e;
-use fragmentation_e2e::get_e2e;
-use fragmentation_e2e::run_eval_e2e;
+use fragmentation_e2e::{EVALApiArgs, GETApiChunksArgs, GETApiFoldersArgs, PUTApiArgs, get_e2e, put_e2e, run_eval_e2e};
 use zenoh::Properties;
+use core::default::Default;
 
 pub fn setup_put(mode: &str, path: &str, value: &str, chunk_size: usize) -> (Properties, String, String, usize) {
     let mut config = Properties::default();
@@ -16,17 +15,13 @@ pub fn setup_put(mode: &str, path: &str, value: &str, chunk_size: usize) -> (Pro
     (config, path, value, chunk_size)
 }
 
-pub fn setup_get(mode: &str, selector: &str, index_start: usize, index_end: usize, chunk_start: usize, chunk_end: usize) -> (Properties, String, String, &'static str, String, String, String, String) {
+pub fn setup_get(mode: &str, selector: &str, index_start: usize, index_end: usize, chunk_start: usize, chunk_end: usize) -> (Properties, String, &'static str, &'static str, usize, usize, usize, usize) {
     let mut config = Properties::default();
     config.insert("mode".to_string(), mode.to_string()); 
     let selector: String = selector.to_string();
     let selector = selector.to_string();
-    let root_folder_final = "/tmp/final".to_string();
+    let root_folder_final = "/tmp/final";
     let root_folder_chunks = "/tmp/chunks";
-    let index_start = index_start.to_string();
-    let index_end = index_end.to_string();
-    let chunk_start = chunk_start.to_string();
-    let chunk_end = chunk_end.to_string();
 
     (config, selector, root_folder_final, root_folder_chunks, index_start, index_end, chunk_start, chunk_end)
 }
@@ -41,7 +36,7 @@ pub fn setup_eval(mode: &str, path: &str, chunk_size: usize) -> (Properties, Str
 
 pub async fn call_put(config: Properties, path: String, value: String, chunk_size: usize) -> Result<(), std::io::ErrorKind> {
     println!("Calling the PUT API to share the file...");
-    match put_e2e(config, path, value, chunk_size).await {
+    match put_e2e(config, path, value, PUTApiArgs{chunk_size}).await {
         Ok(_) => { 
             println!("Finished to send the file.");
             Ok(())
@@ -59,15 +54,15 @@ pub async fn call_put(config: Properties, path: String, value: String, chunk_siz
 
 pub async fn call_get(config: Properties,
     selector: String,
-    root_folder_final: String,
-    root_folder_chunks: &str,
-    index_start: String,
-    index_end: String,
-    chunk_index_start: String,
-    chunk_index_end: String
+    root_folder_final: &'static str,
+    root_folder_chunks: &'static str,
+    index_start: usize,
+    index_end: usize,
+    chunk_index_start: usize,
+    chunk_index_end: usize
     ) -> Result<(), std::io::ErrorKind> {
     println!("Calling the GET API to retrieve the file...");
-    match get_e2e(config, selector, root_folder_final, root_folder_chunks, index_start, index_end, chunk_index_start, chunk_index_end,).await {
+    match get_e2e(config, selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
         Ok(_) => { 
             println!("Finished to retrieve the file.");
             Ok(())
@@ -85,7 +80,7 @@ pub async fn call_get(config: Properties,
 
 pub async fn call_eval(config: Properties, path: String, chunk_size: usize) -> Result<(), std::io::ErrorKind> {
     println!("Calling the PUT API to share the file...");
-    match run_eval_e2e(config, path, chunk_size).await {
+    match run_eval_e2e(config, path, EVALApiArgs{chunk_size}).await {
         Ok(_) => { 
             println!("Finished to execute the Eval.");
             Ok(())

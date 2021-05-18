@@ -15,15 +15,14 @@
 extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
-use fragmentation_e2e::put_e2e;
+use fragmentation_e2e::{PUTApiArgs, put_e2e};
 use zenoh::Properties;
 
 #[async_std::main]
 async fn main() {
     let (config, path, value, chunk_size) = parse_args();
-
     println!("Calling the PUT API to share the file...");
-    let res: String = match put_e2e(config, path, value, chunk_size).await {
+    let res: String = match put_e2e(config, path, value, PUTApiArgs{chunk_size}).await {
         Ok(_) => String::from("Finished to retrieve the file."),
         Err(e) => format!("Error during the Put: {:?}.", e)
     };

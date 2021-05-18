@@ -127,10 +127,10 @@ pub fn get_metadata_info (
 pub fn get_chunks_interval(
     chunks_number: usize,
     chunk_size: usize,
-    index_start: String,
-    index_end: String,
-    chunk_index_start: String,
-    chunk_index_end: String,
+    index_start: usize,
+    index_end: usize,
+    chunk_index_start: usize,
+    chunk_index_end: usize,
 ) -> Result<(usize, usize), Box<dyn Error>> {
     let mut chunk_start: usize = 0;
     let mut chunk_end: usize = chunks_number;
@@ -139,26 +139,21 @@ pub fn get_chunks_interval(
         index_start, index_end, chunk_index_start, chunk_index_end
     );
 
-    let index_start_num = index_start.parse::<usize>()?;
-    let index_end_num = index_end.parse::<usize>()?;
-    let chunk_index_start_num = chunk_index_start.parse::<usize>()?;
-    let chunk_index_end_num = chunk_index_end.parse::<usize>()?;
-
-    if index_start_num > index_end_num {
+    if index_start > index_end {
         return Err("Wrong bytes interval specified.".into());
-    } else if chunk_index_start_num > chunk_index_end_num {
+    } else if chunk_index_start > chunk_index_end {
         return Err("Wrong chunks interval specified.".into());
-    } else if index_end_num != 0 {
-        chunk_start = index_start_num / chunk_size + 1;
-        let chunk_end_raw = index_end_num / chunk_size + 1;
+    } else if index_end != 0 {
+        chunk_start = index_start / chunk_size + 1;
+        let chunk_end_raw = index_end / chunk_size + 1;
         chunk_end = chunk_end_raw.min(chunks_number);
         info!(
             "Bytes decision: chunk start {}, chunk end {}",
             chunk_start, chunk_end
         );
-    } else if chunk_index_end_num != 0 {
-        chunk_start = chunk_index_start_num;
-        chunk_end = chunk_index_end_num.min(chunks_number);
+    } else if chunk_index_end != 0 {
+        chunk_start = chunk_index_start;
+        chunk_end = chunk_index_end.min(chunks_number);
         info!(
             "Chunks decision: chunk start {}, chunk end {}",
             chunk_start, chunk_end
@@ -170,7 +165,7 @@ pub fn get_chunks_interval(
     Ok((chunk_start, chunk_end))
 }
 
-pub fn create_mmap_file(path: String, root_folder_final: String, size: u64) -> Result<File, Box<dyn Error>> {
+pub fn create_mmap_file(path: String, root_folder_final: &str, size: u64) -> Result<File, Box<dyn Error>> {
     let mut f = match OpenOptions::new()
         .read(true)
         .write(true)
