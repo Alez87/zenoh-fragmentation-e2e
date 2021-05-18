@@ -52,7 +52,7 @@ pub struct GETApiFoldersArgs {
 
 /// The API to share a file.
 pub async fn put_e2e(config: Properties, path: String, value: String, args: PUTApiArgs) -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+    //env_logger::init();
     
     if path.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
@@ -123,7 +123,7 @@ pub async fn put_e2e(config: Properties, path: String, value: String, args: PUTA
 
 /// The API to retrieve a shared file
 pub async fn get_e2e (config: Properties,selector: String, folder_args: GETApiFoldersArgs, bytes_args: GETApiChunksArgs) -> Result<String, Box<dyn Error>> {
-    env_logger::init();
+    //env_logger::init();
 
     if selector.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Selector is empty.").into());
@@ -229,8 +229,8 @@ pub async fn get_e2e (config: Properties,selector: String, folder_args: GETApiFo
 
 /// The API to retrieve bytes related the chunks
 pub async fn run_eval_e2e(config: Properties, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
-    env_logger::init();
-
+    //env_logger::init();
+    
     if path_str.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
     }
