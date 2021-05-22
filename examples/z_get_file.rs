@@ -15,7 +15,7 @@
 extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
-use fragmentation_e2e::{GETApiFoldersArgs, GETApiChunksArgs, get_e2e};
+use fragmentation_e2e::{GETApiChunksArgs, GETApiFoldersArgs, ZenohCdn};
 use zenoh::Properties;
 
 #[async_std::main]
@@ -26,8 +26,15 @@ async fn main() {
     let root_folder_final: &str = "/tmp/final";
     let root_folder_chunks: &str = "/tmp/chunks";
 
+    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config.into()).await {
+        Ok(a) => a.into(),
+        Err(e) => {
+            println!("Error during creation of ZenohCdn: {:?}.", e);
+            return
+        }
+    };
     println!("Calling the GET API to retrieve the file...");
-    let res: String = match get_e2e(config, selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
+    let res: String = match zenoh_cdn.get_e2e(selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
         Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
         Err(e) => format!("Error during the Get: {:?}.", e)
     };

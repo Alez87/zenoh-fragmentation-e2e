@@ -2,8 +2,8 @@
 /// 
 
 extern crate fragmentation_e2e;
-use fragmentation_e2e::{EVALApiArgs, GETApiChunksArgs, GETApiFoldersArgs, PUTApiArgs, get_e2e, put_e2e, run_eval_e2e};
-use zenoh::Properties;
+use fragmentation_e2e::{EVALApiArgs, GETApiChunksArgs, GETApiFoldersArgs, PUTApiArgs, ZenohCdn, run_eval_e2e};
+use zenoh::{Properties};
 use core::default::Default;
 
 pub fn setup_put(mode: &str, path: &str, value: &str, chunk_size: usize) -> (Properties, String, String, usize) {
@@ -36,7 +36,8 @@ pub fn setup_eval(mode: &str, path: &str, chunk_size: usize) -> (Properties, Str
 
 pub async fn call_put(config: Properties, path: String, value: String, chunk_size: usize) -> Result<(), std::io::ErrorKind> {
     println!("Calling the PUT API to share the file...");
-    match put_e2e(config, path, value, PUTApiArgs{chunk_size}).await {
+    let zenohcdn = ZenohCdn::new(config).await.unwrap();
+    match zenohcdn.put_e2e(path, value, PUTApiArgs{chunk_size}).await {
         Ok(_) => { 
             println!("Finished to send the file.");
             Ok(())
@@ -62,7 +63,8 @@ pub async fn call_get(config: Properties,
     chunk_index_end: usize
     ) -> Result<(), std::io::ErrorKind> {
     println!("Calling the GET API to retrieve the file...");
-    match get_e2e(config, selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
+    let zenohcdn = ZenohCdn::new(config).await.unwrap();
+    match zenohcdn.get_e2e(selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
         Ok(_) => { 
             println!("Finished to retrieve the file.");
             Ok(())

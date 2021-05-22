@@ -12,7 +12,8 @@
 //   ADLINK zenoh team, <zenoh@adlink-labs.tech>
 //
 
-use std::fs;
+use crate::{EVALApiArgs, PUTApiArgs};
+use std::{fs, io::ErrorKind};
 use std::fs::File;
 use std::path::Path;
 use std::str;
@@ -30,6 +31,37 @@ use log::{info, warn, error};
 use memmap::MmapOptions;
 
 const ROOT_FOLDER: &str = "/tmp";
+
+pub fn check_put_args(path: &String, value: &String, args: PUTApiArgs) -> Result<usize, Box<dyn Error>> {
+    if path.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
+    }
+    if value.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Value is empty.").into());
+    }
+    if args.chunk_size < 100 {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size.").into());
+    }
+    Ok(args.chunk_size)
+}
+
+pub fn check_get_args(selector: String) -> Result<(), Box<dyn Error>> {
+    if selector.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Selector is empty.").into());
+    }
+    Ok(())
+}
+
+pub fn check_eval_args(path_str: String, args: EVALApiArgs) -> Result<usize, Box<dyn Error>> {
+    if path_str.is_empty() {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
+    }
+    if 0 == args.chunk_size {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Chunk size is zero.").into());
+    }
+    Ok(args.chunk_size)
+}
+
 
 pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usize) -> Vec<u8> {
     let full_filename = format!("{}/{}", ROOT_FOLDER, filename);
