@@ -12,6 +12,8 @@ use std::io;
 #[cfg(test)]
 mod tests_put {
 
+    use std::path::PathBuf;
+
     use super::*;
 
     #[async_std::test]
@@ -49,7 +51,11 @@ mod tests_put {
 
     #[ignore] #[async_std::test]
     async fn full_test() {
-        let absolute_path = format!("{}/tests/zenoh.png", std::env::current_dir().unwrap().into_os_string().into_string().unwrap());
+        //let absolute_path = format!("{}/tests/zenoh.png", std::env::current_dir().unwrap().into_os_string().into_string().unwrap());
+        //println!("Absolute image path: {}", absolute_path);
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("tests/zenoh.png");
+        let absolute_path = format!("{}", d.display());        
         let (config, path, value, chunk_size) =
             common::setup_put("peer", "/demo/example/myfile", &absolute_path, 65_000);
         let res = common::call_put(config, path, value, chunk_size).await;
