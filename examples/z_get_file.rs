@@ -20,6 +20,7 @@ use zenoh::Properties;
 
 #[async_std::main]
 async fn main() {
+    env_logger::init();
     let (config, selector, _root_folder, index_start, index_end, chunk_index_start, chunk_index_end) =
         parse_args();
 

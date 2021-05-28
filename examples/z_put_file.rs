@@ -13,6 +13,7 @@
 //
 
 extern crate fragmentation_e2e;
+
 use fragmentation_e2e::ZenohCdn;
 use clap::{App, Arg};
 use fragmentation_e2e::{PUTApiArgs};
@@ -21,7 +22,7 @@ use zenoh::Properties;
 #[async_std::main]
 async fn main() {
     env_logger::init();
-    
+
     let (config, path, value, chunk_size) = parse_args();
     println!("Calling the PUT API to share the file...");
 
@@ -37,12 +38,6 @@ async fn main() {
         Err(e) => format!("Error during the Put: {:?}.", e)
     };
     println!("{}", res);
-
-    match zenoh_cdn.zenoh.close().await {
-        Ok(_) => println!("Closed connection."),
-        Err(e) => println!("Error when closing connection: {:?}.", e)
-    };
-    //ZenohCdn::close(zenoh_cdn).await;
 }
 
 fn parse_args() -> (Properties, String, String, usize) {

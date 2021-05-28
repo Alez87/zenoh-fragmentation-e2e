@@ -15,16 +15,25 @@
 extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
-use fragmentation_e2e::{EVALApiArgs, run_eval_e2e};
+use fragmentation_e2e::{EVALApiArgs, ZenohCdn};
 use zenoh::Properties;
 use core::default::Default;
 
 #[async_std::main]
 async fn main() {
+    env_logger::init();
     let (config, path) = parse_args();
 
     let chunk_size: usize = 65_000;
-    let res: String = match run_eval_e2e(config, path, EVALApiArgs{chunk_size}).await {
+
+    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config.into()).await {
+        Ok(a) => a.into(),
+        Err(e) => {
+            println!("Error during creation of ZenohCdn: {:?}.", e);
+            return
+        }
+    };
+    let res: String = match zenoh_cdn.run_eval_e2e(path, EVALApiArgs{chunk_size}).await {
         Ok(_) => String::from("Finished Eval."),
         Err(e) => format!("Error during the Eval: {:?}.", e)
     };
