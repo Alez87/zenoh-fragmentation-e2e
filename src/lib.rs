@@ -16,7 +16,7 @@ mod utils;
 use utils::*;
 
 use net::RBuf;
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::Arc};
 use std::{
     convert::{TryFrom, TryInto},
     u64, 
@@ -50,16 +50,54 @@ pub struct GETApiFoldersArgs {
     pub chunk_size: usize
  }
 
-pub struct ZenohCdn {
+ #[derive(Clone)]
+  pub struct ZenohCdn {
     pub config: Properties,
-    pub zenoh: Zenoh
+    pub zenoh: Arc<Zenoh>
  }
+
+
+ impl Default for crate::PUTApiArgs {
+    fn default() -> Self { 
+       Self {
+           chunk_size: 65_000
+       }
+   }
+}
+
+impl Default for crate::GETApiChunksArgs {
+   fn default() -> Self { 
+       Self {
+           index_start: 0,
+           index_end: 0,
+           chunk_index_start: 0,
+           chunk_index_end: 0
+      }
+  }
+}
+
+impl Default for crate::GETApiFoldersArgs {
+   fn default() -> Self { 
+       Self {
+           root_folder_final: "/tmp/final",
+           root_folder_chunks: "/tmp/chunks"
+      }
+  }
+}
+
+impl Default for crate::EVALApiArgs {
+   fn default() -> Self { 
+       Self {
+          chunk_size: 65_000
+      }
+  }
+}
 
 impl ZenohCdn {
 
     pub async fn new(config: Properties) -> ZResult<ZenohCdn> {
         info!("New zenoh...");
-        let zenoh = Zenoh::new(config.clone().into()).await?;
+        let zenoh = Arc::new(Zenoh::new(config.clone().into()).await?);
 
         Ok(ZenohCdn {config, zenoh})
     }
@@ -70,20 +108,22 @@ impl ZenohCdn {
     }
 
     /// Returns Zenoh from Zenoh_cdn.
-    pub fn get_zenoh(&self) -> &Zenoh {
-        &self.zenoh
+    pub fn get_zenoh(&self) -> Arc<Zenoh> {
+        self.zenoh.clone()
     }
 
     /// The API to share a file.
     pub async fn put_e2e(&self, path: String, value: String, args: PUTApiArgs) -> Result<(), Box<dyn Error>> {        
         let chunk_size: usize = check_put_args(&path, &value, args)?;
         info!("New workspace...");
+       
         let workspace = self.zenoh.workspace(None).await?;
 
+        println!("Value: {}", value);
         let file_metadata = match fs::metadata(&value) {
             Ok(metadata) => metadata,
             Err(e) => { 
-                error!("Unable to read metadata.");
+                error!("Unable to read metadata form local file {}.", value);
                 return Err(e.into()); 
             }
         };
@@ -123,7 +163,7 @@ impl ZenohCdn {
             workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
             let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
-            call_eval(path, chunks_nums, chunk_size).await;
+            self.call_eval(path, chunks_nums, chunk_size).await;
         }
         Ok(())
     }
@@ -131,12 +171,8 @@ impl ZenohCdn {
 
     /// The API to retrieve a shared file
     pub async fn get_e2e (&self, selector: String, folder_args: GETApiFoldersArgs, bytes_args: GETApiChunksArgs) -> Result<String, Box<dyn Error>> {
-        let _ = env_logger::try_init();
-        
         check_get_args(selector.clone())?;
-        /*info!("New zenoh...");
-        let zenoh = Zenoh::new(config.into()).await?;
-*/
+
         info!("New workspace...");
         let workspace = self.zenoh.workspace(None).await?;
 
@@ -226,73 +262,136 @@ impl ZenohCdn {
             }
 
             let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
-            call_eval(path.clone(), chunks_nums, chunk_size).await;
+            self.call_eval(path.clone(), chunks_nums, chunk_size).await;
         }
         Ok(path_to_return)
     }
-}
-
-pub async fn call_eval(path: String, chunks_nums: Vec<usize>, chunk_size: usize) {
-    let mut tasks = Vec::with_capacity(chunks_nums.len());
-    for n in chunks_nums {
-        let path_eval = path.to_string();
-        tasks.push(async_std::task::spawn(async move {
-            eval(path_eval, n, chunk_size).await;
-        }));
+/*
+    async fn call_eval(self, path: String, chunks_nums: Vec<usize>, chunk_size: usize) {
+        let mut tasks = Vec::with_capacity(chunks_nums.len());
+        //let zenoh = self.clone();
+        let self_arc = Arc::new(self);
+        for n in chunks_nums {
+            let self_arc_clone = self_arc.clone();
+            let path_eval = path.to_string();
+            tasks.push(async_std::task::spawn(async move {
+                self_arc_clone.eval(path_eval, n, chunk_size).await;
+            }));
+        }
+        for task in tasks {
+            task.await;
+        }
     }
-    for task in tasks {
-        task.await;
-    }
-}
 
-async fn eval(path: String, chunk_number: usize, chunk_size: usize) {
-    let mut config = Properties::default();
-    config.insert("-m".to_string(), "peer".to_string());
-    let eval_path = format!("{}/{}", path, chunk_number);
-    info!("Running Eval {} on path {} with config {:?}", chunk_number, eval_path, config
-    );
-    let _ = match run_eval_e2e(config.clone(), eval_path, EVALApiArgs{chunk_size}).await {
-        Ok(_) => info!("Finished Eval {}", chunk_number),
-        Err(e) => error!("Error during the Eval: {}.", e)
-    };
-}
-
-/// The API to retrieve bytes related the chunks
-pub async fn run_eval_e2e(config: Properties, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
-    let _ = env_logger::try_init();
-    
-    let chunk_size: usize = check_eval_args(path_str.clone(), args)?;
-    let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
-    let path_expr = PathExpr::try_from(path_str.clone())?;
-
-    info!("New zenoh...");
-    let zenoh = Zenoh::new(config.into()).await?;
-
-    info!("New workspace...");
-    let workspace = zenoh.workspace(None).await?;
-
-    info!("Register eval for {}'...\n", path_str);
-    let mut get_stream = workspace.register_eval(&path_expr).await?;
-    while let Some(get_request) = get_stream.next().await {
-        let selector = get_request.selector.clone();
-        info!(">> [Eval listener] received get with selector: {}", selector);
-
-        let selector_to_split = format!("{}", selector);
-        let selector_split: Vec<_> = selector_to_split.split('/').collect();
-        let filename = selector_split[selector_split.len() - 2];
-        let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
-            Ok(chunk_number)  => chunk_number,
-            Err(e) => {
-                error!("Chunk number not a valid number: {}.", e);
-                return Err(e.into());
-            }
+    async fn eval(self: Arc<ZenohCdn>, path: String, chunk_number: usize, chunk_size: usize) {
+        let mut config = Properties::default();
+        config.insert("-m".to_string(), "peer".to_string());
+        let eval_path = format!("{}/{}", path, chunk_number);
+        info!("Running Eval {} on path {} with config {:?}", chunk_number, eval_path, config
+        );
+        let _ = match self.run_eval_e2e(eval_path, EVALApiArgs{chunk_size}).await {
+            Ok(_) => info!("Finished Eval {}", chunk_number),
+            Err(e) => error!("Error during the Eval: {}.", e)
         };
-
-        let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
-        info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
-        get_request.reply(path.clone(), chunk_bytes.into()).await;
     }
-    get_stream.close().await?;
-    zenoh.close().await?;
-    Ok(())
+
+    /// The API to retrieve bytes related the chunks
+    async fn run_eval_e2e(self: Arc<ZenohCdn>, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
+        let chunk_size: usize = check_eval_args(path_str.clone(), args)?;
+        let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
+        let path_expr = PathExpr::try_from(path_str.clone())?;
+
+        info!("New workspace...");
+        let workspace = self.zenoh.workspace(None).await?;
+
+        info!("Register eval for {}'...\n", path_str);
+        let mut get_stream = workspace.register_eval(&path_expr).await?;
+        while let Some(get_request) = get_stream.next().await {
+            let selector = get_request.selector.clone();
+            info!(">> [Eval listener] received get with selector: {}", selector);
+
+            let selector_to_split = format!("{}", selector);
+            let selector_split: Vec<_> = selector_to_split.split('/').collect();
+            let filename = selector_split[selector_split.len() - 2];
+            let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
+                Ok(chunk_number)  => chunk_number,
+                Err(e) => {
+                    error!("Chunk number not a valid number: {}.", e);
+                    return Err(e.into());
+                }
+            };
+
+            let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
+            info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
+            get_request.reply(path.clone(), chunk_bytes.into()).await;
+        }
+        get_stream.close().await?;
+        Ok(())
+    }*/
+
+
+    pub async fn call_eval(&self, path: String, chunks_nums: Vec<usize>, chunk_size: usize) {
+        let mut tasks = Vec::with_capacity(chunks_nums.len());
+        for n in chunks_nums {
+            let zenoh = self.clone();
+            let path_eval = path.to_string();
+            tasks.push(async_std::task::spawn(async move {
+                zenoh.eval(path_eval, n, chunk_size).await;
+            }));
+        }
+        for task in tasks {
+            task.await;
+        }
+    }
+    
+    async fn eval(&self, path: String, chunk_number: usize, chunk_size: usize) {
+        //let mut config = Properties::default();
+        //config.insert("-m".to_string(), "peer".to_string());
+        let eval_path = format!("{}/{}", path, chunk_number);
+        info!("Running Eval {} on path {}", chunk_number, eval_path);
+        let _ = match self.run_eval_e2e(eval_path, EVALApiArgs{chunk_size}).await {
+            Ok(_) => info!("Finished Eval {}", chunk_number),
+            Err(e) => error!("Error during the Eval: {}.", e)
+        };
+    }
+    
+    /// The API to retrieve bytes related the chunks
+    pub async fn run_eval_e2e(&self, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
+        let _ = env_logger::try_init();
+        
+        let chunk_size: usize = check_eval_args(path_str.clone(), args)?;
+        let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
+        let path_expr = PathExpr::try_from(path_str.clone())?;
+    
+        info!("New workspace...");
+        let workspace = self.zenoh.workspace(None).await?;
+    
+        info!("Register eval for {}'...\n", path_str);
+        let mut get_stream = workspace.register_eval(&path_expr).await?;
+        while let Some(get_request) = get_stream.next().await {
+            let selector = get_request.selector.clone();
+            info!(">> [Eval listener] received get with selector: {}", selector);
+    
+            let selector_to_split = format!("{}", selector);
+            let selector_split: Vec<_> = selector_to_split.split('/').collect();
+            let filename = selector_split[selector_split.len() - 2];
+            let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
+                Ok(chunk_number)  => chunk_number,
+                Err(e) => {
+                    error!("Chunk number not a valid number: {}.", e);
+                    return Err(e.into());
+                }
+            };
+    
+            let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
+            info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
+            get_request.reply(path.clone(), chunk_bytes.into()).await;
+        }
+        get_stream.close().await?;
+        Ok(())
+    }
+    
+
 }
+
+

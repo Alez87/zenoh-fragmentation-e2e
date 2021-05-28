@@ -42,7 +42,7 @@ impl Default for crate::GETApiFoldersArgs {
    }
 }
 
-impl Default for EVALApiArgs {
+impl Default for crate::EVALApiArgs {
     fn default() -> Self { 
         Self {
            chunk_size: 65_000
