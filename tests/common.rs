@@ -2,13 +2,14 @@
 /// 
 
 extern crate fragmentation_e2e;
-use fragmentation_e2e::{EVALApiArgs, GETApiChunksArgs, GETApiFoldersArgs, PUTApiArgs, ZenohCdn, run_eval_e2e};
+use fragmentation_e2e::{EVALApiArgs, GETApiChunksArgs, GETApiFoldersArgs, PUTApiArgs, ZenohCdn};
 use zenoh::{Properties};
 use core::default::Default;
 
 pub fn setup_put(mode: &str, path: &str, value: &str, chunk_size: usize) -> (Properties, String, String, usize) {
     let mut config = Properties::default();
-    config.insert("mode".to_string(), mode.to_string()); 
+    config.insert("mode".to_string(), mode.to_string());
+    config.insert("-l".to_string(), "tcp/127.0.0.1:7448".to_string()); 
     let path: String = path.to_string();
     let value: String = value.to_string();
 
@@ -18,6 +19,7 @@ pub fn setup_put(mode: &str, path: &str, value: &str, chunk_size: usize) -> (Pro
 pub fn setup_get(mode: &str, selector: &str, index_start: usize, index_end: usize, chunk_start: usize, chunk_end: usize) -> (Properties, String, &'static str, &'static str, usize, usize, usize, usize) {
     let mut config = Properties::default();
     config.insert("mode".to_string(), mode.to_string()); 
+    //config.insert("-l".to_string(), "tcp/127.0.0.1:7448".to_string()); 
     let selector: String = selector.to_string();
     let selector = selector.to_string();
     let root_folder_final = "/tmp/final";
@@ -82,7 +84,8 @@ pub async fn call_get(config: Properties,
 
 pub async fn call_eval(config: Properties, path: String, chunk_size: usize) -> Result<(), std::io::ErrorKind> {
     println!("Calling the PUT API to share the file...");
-    match run_eval_e2e(config, path, EVALApiArgs{chunk_size}).await {
+    let zenoh_cdn = ZenohCdn::new(config).await.unwrap();
+    match zenoh_cdn.run_eval_e2e(path, EVALApiArgs{chunk_size}).await {
         Ok(_) => { 
             println!("Finished to execute the Eval.");
             Ok(())
