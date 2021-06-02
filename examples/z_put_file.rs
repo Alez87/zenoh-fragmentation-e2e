@@ -30,8 +30,8 @@ async fn main() {
 
     let start = Instant::now();
 
-    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config.into()).await {
-        Ok(a) => a.into(),
+    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config).await {
+        Ok(a) => a,
         Err(e) => {
             println!("Error during creation of ZenohCdn: {:?}.", e);
             return
