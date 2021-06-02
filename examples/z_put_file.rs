@@ -14,6 +14,8 @@
 
 extern crate fragmentation_e2e;
 
+use std::time::Instant;
+
 use fragmentation_e2e::ZenohCdn;
 use clap::{App, Arg};
 use fragmentation_e2e::{PUTApiArgs};
@@ -26,6 +28,8 @@ async fn main() {
     let (config, path, value, chunk_size) = parse_args();
     println!("Calling the PUT API to share the file...");
 
+    let start = Instant::now();
+
     let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config.into()).await {
         Ok(a) => a.into(),
         Err(e) => {
@@ -33,10 +37,18 @@ async fn main() {
             return
         }
     };
+    
+    let cretion_time = start.elapsed().as_micros();
+    println!("ZenohCDN creation: {}us", cretion_time);
+
     let res: String = match zenoh_cdn.put_e2e(path, value, PUTApiArgs{chunk_size}).await {
-        Ok(_) => String::from("Finished to retrieve the file."),
+        Ok(_) => String::from("Finished to share the file."),
         Err(e) => format!("Error during the Put: {:?}.", e)
     };
+
+    let finish = start.elapsed().as_micros();
+    println!("End of PUT Api: {}us", finish);
+
     println!("{}", res);
 }
 

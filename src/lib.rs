@@ -162,8 +162,8 @@ impl ZenohCdn {
             info!("Size metadata: {}", metadata.len());
             workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
-            let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
-            self.call_eval(path, chunks_nums, chunk_size).await;
+            //let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
+            //self.call_eval(path, chunks_nums, chunk_size).await;
         }
         Ok(())
     }
@@ -181,15 +181,15 @@ impl ZenohCdn {
         let mut data_stream = workspace.get(&selector.try_into()?).await?;
 
         let mut found_selector = false;
-        while let Some(data) = data_stream.next().await {
+        while let Some(_data) = data_stream.next().await {
             found_selector = true;
-            info!(
+            /*info!(
                 "  {} : {:?} (encoding: {} , timestamp: {})",
-                data.path,
-                data.value,
-                data.value.encoding_descr(),
-                data.timestamp
-            )
+                _data.path,
+                _data.value,
+                _data.value.encoding_descr(),
+                _data.timestamp
+            )*/
         }
         let mut path_to_return = "".to_string();
         if !found_selector {
@@ -258,11 +258,11 @@ impl ZenohCdn {
                     info!("Checksum verified -> OK");
                 }
             } else {
-                warn!("{} chunks missing. Check them to recrete the whole file.", count_chunks);
+                warn!("{} chunks missing. Check them to recreate the whole file.", count_chunks);
             }
 
-            let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
-            self.call_eval(path.clone(), chunks_nums, chunk_size).await;
+            //let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
+            //self.call_eval(path.clone(), chunks_nums, chunk_size).await;
         }
         Ok(path_to_return)
     }

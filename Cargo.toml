@@ -25,7 +25,7 @@ description = "Zenoh End-to-end Files Fragmentation."
 readme = "README.md"
 
 [package.metadata.deb]
-name = "zzenoh-fragmentation-e2e"
+name = "zenoh-fragmentation-e2e"
 maintainer = "zenoh-dev@eclipse.org"
 copyright = "2017, 2020 ADLINK Technology Inc."
 section = "net"
@@ -59,6 +59,10 @@ path = "examples/z_get_file.rs"
 [[example]]
 name = "z_eval_file"
 path = "examples/z_eval_file.rs"
+
+[[example]]
+name = "z_benchmark_get"
+path = "examples/z_benchmark_get.rs"
 
 [[test]]
 name = "tests"
