@@ -162,8 +162,8 @@ impl ZenohCdn {
             info!("Size metadata: {}", metadata.len());
             workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
-            //let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
-            //self.call_eval(path, chunks_nums, chunk_size).await;
+            let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
+            self.call_eval(path, chunks_nums, chunk_size).await;
         }
         Ok(())
     }
@@ -261,74 +261,11 @@ impl ZenohCdn {
                 warn!("{} chunks missing. Check them to recreate the whole file.", count_chunks);
             }
 
-            //let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
-            //self.call_eval(path.clone(), chunks_nums, chunk_size).await;
+            let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
+            self.call_eval(path.clone(), chunks_nums, chunk_size).await;
         }
         Ok(path_to_return)
     }
-/*
-    async fn call_eval(self, path: String, chunks_nums: Vec<usize>, chunk_size: usize) {
-        let mut tasks = Vec::with_capacity(chunks_nums.len());
-        //let zenoh = self.clone();
-        let self_arc = Arc::new(self);
-        for n in chunks_nums {
-            let self_arc_clone = self_arc.clone();
-            let path_eval = path.to_string();
-            tasks.push(async_std::task::spawn(async move {
-                self_arc_clone.eval(path_eval, n, chunk_size).await;
-            }));
-        }
-        for task in tasks {
-            task.await;
-        }
-    }
-
-    async fn eval(self: Arc<ZenohCdn>, path: String, chunk_number: usize, chunk_size: usize) {
-        let mut config = Properties::default();
-        config.insert("-m".to_string(), "peer".to_string());
-        let eval_path = format!("{}/{}", path, chunk_number);
-        info!("Running Eval {} on path {} with config {:?}", chunk_number, eval_path, config
-        );
-        let _ = match self.run_eval_e2e(eval_path, EVALApiArgs{chunk_size}).await {
-            Ok(_) => info!("Finished Eval {}", chunk_number),
-            Err(e) => error!("Error during the Eval: {}.", e)
-        };
-    }
-
-    /// The API to retrieve bytes related the chunks
-    async fn run_eval_e2e(self: Arc<ZenohCdn>, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
-        let chunk_size: usize = check_eval_args(path_str.clone(), args)?;
-        let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
-        let path_expr = PathExpr::try_from(path_str.clone())?;
-
-        info!("New workspace...");
-        let workspace = self.zenoh.workspace(None).await?;
-
-        info!("Register eval for {}'...\n", path_str);
-        let mut get_stream = workspace.register_eval(&path_expr).await?;
-        while let Some(get_request) = get_stream.next().await {
-            let selector = get_request.selector.clone();
-            info!(">> [Eval listener] received get with selector: {}", selector);
-
-            let selector_to_split = format!("{}", selector);
-            let selector_split: Vec<_> = selector_to_split.split('/').collect();
-            let filename = selector_split[selector_split.len() - 2];
-            let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
-                Ok(chunk_number)  => chunk_number,
-                Err(e) => {
-                    error!("Chunk number not a valid number: {}.", e);
-                    return Err(e.into());
-                }
-            };
-
-            let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
-            info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
-            get_request.reply(path.clone(), chunk_bytes.into()).await;
-        }
-        get_stream.close().await?;
-        Ok(())
-    }*/
-
 
     pub async fn call_eval(&self, path: String, chunks_nums: Vec<usize>, chunk_size: usize) {
         let mut tasks = Vec::with_capacity(chunks_nums.len());
@@ -345,8 +282,6 @@ impl ZenohCdn {
     }
     
     async fn eval(&self, path: String, chunk_number: usize, chunk_size: usize) {
-        //let mut config = Properties::default();
-        //config.insert("-m".to_string(), "peer".to_string());
         let eval_path = format!("{}/{}", path, chunk_number);
         info!("Running Eval {} on path {}", chunk_number, eval_path);
         let _ = match self.run_eval_e2e(eval_path, EVALApiArgs{chunk_size}).await {
@@ -390,8 +325,4 @@ impl ZenohCdn {
         get_stream.close().await?;
         Ok(())
     }
-    
-
 }
-
-
