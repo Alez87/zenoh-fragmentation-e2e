@@ -31,10 +31,12 @@ use std::error::Error;
 
 const ROOT_FOLDER: &str = "/tmp";
 
+#[derive(Clone, Copy)]
 pub struct PUTApiArgs {
     pub chunk_size: usize
  }
 
+#[derive(Clone)]
 pub struct GETApiChunksArgs {
     pub index_start: usize,
     pub index_end: usize,
@@ -42,6 +44,7 @@ pub struct GETApiChunksArgs {
     pub chunk_index_end: usize
  }
 
+#[derive(Clone)]
 pub struct GETApiFoldersArgs {
     pub root_folder_final: &'static str,
     pub root_folder_chunks: &'static str
@@ -52,10 +55,11 @@ pub struct GETApiFoldersArgs {
 
  #[derive(Clone)]
   pub struct ZenohCdn {
-    pub config: Properties,
-    pub zenoh: Arc<Zenoh>
+    pub zenoh: Arc<Zenoh>,
+    upload_args: PUTApiArgs,
+    download_folders: GETApiFoldersArgs, 
+    download_bytes_args: GETApiChunksArgs
  }
-
 
  impl Default for crate::PUTApiArgs {
     fn default() -> Self { 
@@ -97,14 +101,13 @@ impl ZenohCdn {
 
     pub async fn new(config: Properties) -> ZResult<ZenohCdn> {
         info!("New zenoh...");
-        let zenoh = Arc::new(Zenoh::new(config.clone().into()).await?);
+        let zenoh = Arc::new(Zenoh::new(config.into()).await?);
 
-        Ok(ZenohCdn {config, zenoh})
-    }
+        let upload_args = PUTApiArgs::default();
+        let download_folders = GETApiFoldersArgs::default();
+        let download_bytes_args = GETApiChunksArgs::default();
 
-    /// Returns the config that was used to create this Zenoh_cdn.
-    pub fn config(&self) -> &Properties {
-        &self.config
+        Ok(ZenohCdn {zenoh, upload_args, download_folders, download_bytes_args})
     }
 
     /// Returns Zenoh from Zenoh_cdn.
@@ -112,9 +115,39 @@ impl ZenohCdn {
         self.zenoh.clone()
     }
 
+    /// Get a reference to the zenoh cdn's folder download folders.
+    pub fn download_folders(&self) -> &GETApiFoldersArgs {
+        &self.download_folders
+    }
+
+    /// Set the zenoh cdn's folder download folders.
+    pub fn set_download_folders(&mut self, download_folders: GETApiFoldersArgs) {
+        self.download_folders = download_folders;
+    }
+
+    /// Get a reference to the zenoh cdn's download bytes args.
+    pub fn download_bytes_args(&self) -> &GETApiChunksArgs {
+        &self.download_bytes_args
+    }
+
+    /// Set the zenoh cdn's download bytes args.
+    pub fn set_download_bytes_args(&mut self, download_bytes_args: GETApiChunksArgs) {
+        self.download_bytes_args = download_bytes_args;
+    }
+
+    /// Get a reference to the zenoh cdn's upload args.
+    pub fn upload_args(&self) -> &PUTApiArgs {
+        &self.upload_args
+    }
+
+    /// Set the zenoh cdn's upload args.
+    pub fn set_upload_args(&mut self, upload_args: PUTApiArgs) {
+        self.upload_args = upload_args;
+    }
+
     /// The API to share a file.
-    pub async fn put_e2e(&self, path: String, value: String, args: PUTApiArgs) -> Result<(), Box<dyn Error>> {        
-        let chunk_size: usize = check_put_args(&path, &value, args)?;
+    pub async fn upload(&self, path: String, value: String) -> Result<(), Box<dyn Error>> { 
+        let chunk_size: usize = check_put_args(&path, &value, self.upload_args)?;
         info!("New workspace...");
        
         let workspace = self.zenoh.workspace(None).await?;
@@ -162,7 +195,7 @@ impl ZenohCdn {
             info!("Size metadata: {}", metadata.len());
             workspace.put(&metadata_path.try_into()?, metadata.into()).await?;
 
-            let chunks_nums: Vec<_> = (1..=chunks_number).map(|i| i).collect();
+            let chunks_nums: Vec<_> = (1..=chunks_number).collect();
             self.call_eval(path, chunks_nums, chunk_size).await;
         }
         Ok(())
@@ -170,7 +203,7 @@ impl ZenohCdn {
 
 
     /// The API to retrieve a shared file
-    pub async fn get_e2e (&self, selector: String, folder_args: GETApiFoldersArgs, bytes_args: GETApiChunksArgs) -> Result<String, Box<dyn Error>> {
+    pub async fn download(&self, selector: String) -> Result<String, Box<dyn Error>> {
         check_get_args(selector.clone())?;
 
         info!("New workspace...");
@@ -217,15 +250,15 @@ impl ZenohCdn {
             let (chunk_start, chunk_end) = get_chunks_interval(
                 chunks_number,
                 chunk_size,
-                bytes_args.index_start,
-                bytes_args.index_end,
-                bytes_args.chunk_index_start,
-                bytes_args.chunk_index_end,
+                self.download_bytes_args.index_start,
+                self.download_bytes_args.index_end,
+                self.download_bytes_args.chunk_index_start,
+                self.download_bytes_args.chunk_index_end,
             )?;
 
-            let path = format!("{}/{}", folder_args.root_folder_final, &filename);
+            let path = format!("{}/{}", self.download_folders.root_folder_final, &filename);
             path_to_return = path.clone();
-            let final_file = create_mmap_file(path.clone(), folder_args.root_folder_final, size as u64)?;
+            let final_file = create_mmap_file(path.clone(), self.download_folders.root_folder_final, size as u64)?;
 
             for chunk_num in chunk_start..chunk_end + 1 {
                 let chunk_selector = format!("{}/{}", old_selector, chunk_num);
@@ -244,9 +277,9 @@ impl ZenohCdn {
                             },
                     };
                     let filename_num = format!("{}_{}", &filename, chunk_num);
-                    let full_filename = format!("{}/{}", folder_args.root_folder_chunks, filename_num);
+                    let full_filename = format!("{}/{}", self.download_folders.root_folder_chunks, filename_num);
                     write_mmap_file(&final_file, chunk_content.to_vec(), chunk_num, chunk_size);
-                    write_file(folder_args.root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
+                    write_file(self.download_folders.root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
                 }
             }
             let count_chunks = chunk_end - chunk_start + 1;
@@ -261,7 +294,7 @@ impl ZenohCdn {
                 warn!("{} chunks missing. Check them to recreate the whole file.", count_chunks);
             }
 
-            let chunks_nums: Vec<_> = (chunk_start..=chunk_end).map(|i| i).collect();
+            let chunks_nums: Vec<_> = (chunk_start..=chunk_end).collect();
             self.call_eval(path.clone(), chunks_nums, chunk_size).await;
         }
         Ok(path_to_return)

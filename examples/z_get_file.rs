@@ -16,7 +16,7 @@ extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
 use fragmentation_e2e::{GETApiChunksArgs, GETApiFoldersArgs, ZenohCdn};
-use zenoh::Properties;
+use zenoh::{Properties, ZError};
 
 #[async_std::main]
 async fn main() {
@@ -27,15 +27,19 @@ async fn main() {
     let root_folder_final: &str = "/tmp/final";
     let root_folder_chunks: &str = "/tmp/chunks";
 
-    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config).await {
-        Ok(a) => a,
-        Err(e) => {
-            println!("Error during creation of ZenohCdn: {:?}.", e);
-            return
-        }
-    };
+    let mut zenoh_cdn = ZenohCdn::new(config)
+    .await
+    .map_err(|e: ZError| {
+        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+            descr: format!("Error during creation of ZenohCdn: {}", e),
+        })
+    }).unwrap();
+    
+    zenoh_cdn.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
+    zenoh_cdn.set_download_bytes_args(GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end});
+    
     println!("Calling the GET API to retrieve the file...");
-    let res: String = match zenoh_cdn.get_e2e(selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
+    let res: String = match zenoh_cdn.download(selector).await {
         Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
         Err(e) => format!("Error during the Get: {:?}.", e)
     };

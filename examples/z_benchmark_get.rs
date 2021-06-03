@@ -18,7 +18,7 @@ use async_std::sync::Arc;
 use std::time::Instant;
 
 use fragmentation_e2e::{GETApiChunksArgs, GETApiFoldersArgs, ZenohCdn};
-use zenoh::{Properties};
+use zenoh::{Properties, ZError};
 
 #[async_std::main]
 async fn main() {
@@ -35,20 +35,23 @@ async fn main() {
 
     let start = Instant::now();
 
-    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config.into()).await {
-        Ok(a) => a.into(),
-        Err(e) => {
-            println!("Error during creation of ZenohCdn: {:?}.", e);
-            return
-        }
-    };
+    let mut zenoh_cdn = ZenohCdn::new(config)
+    .await
+    .map_err(|e: ZError| {
+        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+            descr: format!("Error during creation of ZenohCdn: {}", e),
+        })
+    }).unwrap();
+
+    zenoh_cdn.set_download_folders(GETApiFoldersArgs::default());
+    zenoh_cdn.set_download_bytes_args(GETApiChunksArgs::default());
 
     let creation_time = start.elapsed().as_micros();
     println!("ZenohCDN creation: {}us", creation_time);
 
     let zenoh: Arc<ZenohCdn> = Arc::new(zenoh_cdn);
     let count: usize = 5;
-    let num: Vec<usize> = (1..=count).map(|i| i).collect();
+    let num: Vec<usize> = (1..=count).collect();
     call_func(zenoh, path, num, chunk_size).await;
 }
 
@@ -81,7 +84,7 @@ async fn func(zenoh_cdn: Arc<ZenohCdn>, path: String, chunk_number: usize, _chun
     //let path = format!("{}/{}", path, _chunk_number%2);
     println!("Calling GET api for chunk number {}", chunk_number);
     println!("Path: {}", path);
-    let _ = match zenoh_cdn.get_e2e(path, GETApiFoldersArgs::default(), GETApiChunksArgs::default()).await {
+    let _ = match zenoh_cdn.download(path).await {
         Ok(_) => println!("Finished Eval {}", chunk_number),
         Err(e) => println!("Error during the Eval: {}.", e)
     };

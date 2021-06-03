@@ -32,7 +32,7 @@ use memmap::MmapOptions;
 
 const ROOT_FOLDER: &str = "/tmp";
 
-pub fn check_put_args(path: &String, value: &String, args: PUTApiArgs) -> Result<usize, Box<dyn Error>> {
+pub fn check_put_args(path: &str, value: &str, args: PUTApiArgs) -> Result<usize, Box<dyn Error>> {
     if path.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Path is empty.").into());
     }
@@ -92,6 +92,7 @@ pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usiz
     buffer
 }
 
+#[allow(clippy::type_complexity)]
 pub fn get_metadata_info (
     metadata: String,
     old_selector: String,
@@ -248,7 +249,6 @@ pub fn write_mmap_file(f: &File, src: Vec<u8>, chunk_num: usize, chunk_size: usi
     
 
 pub fn write_file(root_folder_chunks: &str, all_bytes: Vec<u8>, filename: String) -> Result<(), Box<dyn Error>> {
-    //let mut f = File::create(filename.clone()).expect("Unable to create file");
     let mut f = match File::create(filename.clone()) {
         Ok(f) => f,
         Err(_) => {

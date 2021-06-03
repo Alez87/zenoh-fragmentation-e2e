@@ -38,8 +38,10 @@ pub fn setup_eval(mode: &str, path: &str, chunk_size: usize) -> (Properties, Str
 
 pub async fn call_put(config: Properties, path: String, value: String, chunk_size: usize) -> Result<(), std::io::ErrorKind> {
     println!("Calling the PUT API to share the file...");
-    let zenohcdn = ZenohCdn::new(config).await.unwrap();
-    match zenohcdn.put_e2e(path, value, PUTApiArgs{chunk_size}).await {
+    let mut zenohcdn = ZenohCdn::new(config).await.unwrap();
+    zenohcdn.set_upload_args(PUTApiArgs{chunk_size});
+
+    match zenohcdn.upload(path, value).await {
         Ok(_) => { 
             println!("Finished to send the file.");
             Ok(())
@@ -65,8 +67,12 @@ pub async fn call_get(config: Properties,
     chunk_index_end: usize
     ) -> Result<(), std::io::ErrorKind> {
     println!("Calling the GET API to retrieve the file...");
-    let zenohcdn = ZenohCdn::new(config).await.unwrap();
-    match zenohcdn.get_e2e(selector, GETApiFoldersArgs{root_folder_final, root_folder_chunks}, GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end}).await {
+    let mut zenohcdn = ZenohCdn::new(config).await.unwrap();
+    
+    zenohcdn.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
+    zenohcdn.set_download_bytes_args(GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end});
+    
+    match zenohcdn.download(selector).await {
         Ok(_) => { 
             println!("Finished to retrieve the file.");
             Ok(())

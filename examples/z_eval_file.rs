@@ -16,7 +16,7 @@ extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
 use fragmentation_e2e::{EVALApiArgs, ZenohCdn};
-use zenoh::Properties;
+use zenoh::{Properties, ZError};
 use core::default::Default;
 
 #[async_std::main]
@@ -26,13 +26,14 @@ async fn main() {
 
     let chunk_size: usize = 65_000;
 
-    let zenoh_cdn: ZenohCdn = match ZenohCdn::new(config).await {
-        Ok(a) => a,
-        Err(e) => {
-            println!("Error during creation of ZenohCdn: {:?}.", e);
-            return
-        }
-    };
+    let zenoh_cdn = ZenohCdn::new(config)
+    .await
+    .map_err(|e: ZError| {
+        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+            descr: format!("Error during creation of ZenohCdn: {}", e),
+        })
+    }).unwrap();
+
     let res: String = match zenoh_cdn.run_eval_e2e(path, EVALApiArgs{chunk_size}).await {
         Ok(_) => String::from("Finished Eval."),
         Err(e) => format!("Error during the Eval: {:?}.", e)
