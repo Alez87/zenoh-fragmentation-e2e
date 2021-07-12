@@ -14,19 +14,19 @@
 
 extern crate fragmentation_e2e;
 
+use fragmentation_e2e::ZenohCdn;
 use clap::{App, Arg};
-use fragmentation_e2e::{EVALApiArgs, ZenohCdn};
+use fragmentation_e2e::{PUTApiArgs};
 use zenoh::{Properties, ZError};
-use core::default::Default;
 
 #[async_std::main]
 async fn main() {
     env_logger::init();
-    let (config, path) = parse_args();
 
-    let chunk_size: usize = 65_000;
+    let (config, path, value, chunk_size) = parse_args();
+    println!("Calling the PUT API to share the file...");
 
-    let zenoh_cdn = ZenohCdn::new_session(config)
+    let mut zenoh_cdn = ZenohCdn::new_session(config)
     .await
     .map_err(|e: ZError| {
         zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
@@ -34,16 +34,17 @@ async fn main() {
         })
     }).unwrap();
 
-    let res: String = match zenoh_cdn.run_eval_e2e(path, EVALApiArgs{chunk_size}).await {
-        Ok(_) => String::from("Finished Eval."),
-        Err(e) => format!("Error during the Eval: {:?}.", e)
+    zenoh_cdn.set_upload_args(PUTApiArgs{chunk_size});
+
+    let res: String = match zenoh_cdn.send(path, value).await {
+        Ok(_) => String::from("Finished to share the file."),
+        Err(e) => format!("Error during the Put: {:?}.", e)
     };
     println!("{}", res);
 }
 
-#[allow(dead_code)]
-fn parse_args() -> (Properties, String) {
-    let args = App::new("zenoh eval example")
+fn parse_args() -> (Properties, String, String, usize) {
+    let args = App::new("zenoh put example")
         .arg(
             Arg::from_usage("-m, --mode=[MODE] 'The zenoh session mode.")
                 .possible_values(&["peer", "client"])
@@ -56,12 +57,22 @@ fn parse_args() -> (Properties, String) {
             "-l, --listener=[LOCATOR]...   'Locators to listen on.'",
         ))
         .arg(
-            Arg::from_usage("-p, --path=[PATH] 'The path the eval will respond for'")
-                .default_value("/demo/example/eval"),
+            Arg::from_usage("-p, --path=[PATH]        'The name of the resource to put.'")
+                .default_value("/demo/example/zenoh-rs-put"),
+        )
+        .arg(
+            Arg::from_usage("-v, --value=[VALUE]      'The value of the resource to put.'")
+                .default_value("Put from Rust!"),
         )
         .arg(Arg::from_usage(
             "--no-multicast-scouting 'Disable the multicast-based scouting mechanism.'",
         ))
+        .arg(
+            Arg::from_usage(
+                "-s, --csize=[VALUE]      'The size of the chunk size to use to fragment.'",
+            )
+            .default_value("65000"),
+        )
         .get_matches();
 
     let mut config = Properties::default();
@@ -75,6 +86,9 @@ fn parse_args() -> (Properties, String) {
     }
 
     let path = args.value_of("path").unwrap().to_string();
+    let value = args.value_of("value").unwrap().to_string();
+    let chunk_size_string: String = args.value_of("csize").unwrap().to_string();
+    let chunk_size: usize = chunk_size_string.parse::<usize>().unwrap();
 
-    (config, path)
+    (config, path, value, chunk_size)
 }

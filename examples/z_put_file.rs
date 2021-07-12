@@ -30,7 +30,7 @@ async fn main() {
 
     let start = Instant::now();
 
-    let mut zenoh_cdn = ZenohCdn::new(config)
+    let mut zenoh_cdn = ZenohCdn::new_session(config)
     .await
     .map_err(|e: ZError| {
         zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {

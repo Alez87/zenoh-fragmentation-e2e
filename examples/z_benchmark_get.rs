@@ -35,7 +35,7 @@ async fn main() {
 
     let start = Instant::now();
 
-    let mut zenoh_cdn = ZenohCdn::new(config)
+    let mut zenoh_cdn = ZenohCdn::new_session(config)
     .await
     .map_err(|e: ZError| {
         zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
@@ -84,7 +84,7 @@ async fn func(zenoh_cdn: Arc<ZenohCdn>, path: String, chunk_number: usize, _chun
     //let path = format!("{}/{}", path, _chunk_number%2);
     println!("Calling GET api for chunk number {}", chunk_number);
     println!("Path: {}", path);
-    let _ = match zenoh_cdn.download(path).await {
+    let _ = match zenoh_cdn.download(path, "").await {
         Ok(_) => println!("Finished Eval {}", chunk_number),
         Err(e) => println!("Error during the Eval: {}.", e)
     };

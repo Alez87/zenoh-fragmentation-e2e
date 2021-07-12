@@ -53,6 +53,10 @@ name = "z_put_file"
 path = "examples/z_put_file.rs"
 
 [[example]]
+name = "z_send_file"
+path = "examples/z_send_file.rs"
+
+[[example]]
 name = "z_get_file"
 path = "examples/z_get_file.rs"
 
@@ -63,6 +67,10 @@ path = "examples/z_eval_file.rs"
 [[example]]
 name = "z_benchmark_get"
 path = "examples/z_benchmark_get.rs"
+
+[[example]]
+name = "z_multiple_evals"
+path = "examples/z_multiple_evals.rs"
 
 [[test]]
 name = "tests"

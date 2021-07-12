@@ -17,6 +17,7 @@ extern crate fragmentation_e2e;
 use clap::{App, Arg};
 use fragmentation_e2e::{GETApiChunksArgs, GETApiFoldersArgs, ZenohCdn};
 use zenoh::{Properties, ZError};
+use std::time::Instant;
 
 #[async_std::main]
 async fn main() {
@@ -27,22 +28,31 @@ async fn main() {
     let root_folder_final: &str = "/tmp/final";
     let root_folder_chunks: &str = "/tmp/chunks";
 
-    let mut zenoh_cdn = ZenohCdn::new(config)
+    let start = Instant::now();
+
+    let mut zenoh_cdn = ZenohCdn::new_session(config)
     .await
     .map_err(|e: ZError| {
         zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
             descr: format!("Error during creation of ZenohCdn: {}", e),
         })
     }).unwrap();
+
+    let creation_time = start.elapsed().as_micros();
+    println!("ZenohCDN creation: {}us", creation_time);
     
     zenoh_cdn.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
     zenoh_cdn.set_download_bytes_args(GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end});
     
     println!("Calling the GET API to retrieve the file...");
-    let res: String = match zenoh_cdn.download(selector).await {
+    let res: String = match zenoh_cdn.download(selector, "").await {
         Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
         Err(e) => format!("Error during the Get: {:?}.", e)
     };
+
+    let creation_time = start.elapsed().as_micros();
+    println!("Finished to retrieve the file: {}us", creation_time);
+
     println!("{}", res);
 }
 

@@ -39,8 +39,8 @@ pub fn check_put_args(path: &str, value: &str, args: PUTApiArgs) -> Result<usize
     if value.is_empty() {
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Value is empty.").into());
     }
-    if args.chunk_size < 100 {
-        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size.").into());
+    if args.chunk_size < 1000 {
+        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size: too small.").into());
     }
     Ok(args.chunk_size)
 }
