@@ -16,98 +16,97 @@ mod utils;
 use futures::future::{AbortHandle, Abortable};
 use utils::*;
 
-use net::RBuf;
-use std::{fs, path::Path, sync::Arc};
+use futures::{prelude::*, select};
+use log::{error, info, warn};
+use net::ZBuf;
+use std::error::Error;
+use std::fs::copy;
+use std::io::ErrorKind;
 use std::{
     convert::{TryFrom, TryInto},
-    u64, 
-    str,
+    str, u64,
 };
+use std::{fs, path::Path, sync::Arc};
 use zenoh::*;
-use futures::{prelude::*, select};
-use std::fs::copy;
-use log::{info, warn, error};
-use std::io::ErrorKind;
-use std::error::Error;
 
 const ROOT_FOLDER: &str = "/tmp";
 const MSG_FILE_RECEIVED: &str = "OK";
 
 #[derive(Clone, Copy)]
 pub struct PUTApiArgs {
-    pub chunk_size: usize
- }
+    pub chunk_size: usize,
+}
 
 #[derive(Clone)]
 pub struct GETApiChunksArgs {
     pub index_start: usize,
     pub index_end: usize,
     pub chunk_index_start: usize,
-    pub chunk_index_end: usize
- }
+    pub chunk_index_end: usize,
+}
 
 #[derive(Clone)]
 pub struct GETApiFoldersArgs {
     pub root_folder_final: &'static str,
-    pub root_folder_chunks: &'static str
- }
- pub struct EVALApiArgs {
-    pub chunk_size: usize
- }
+    pub root_folder_chunks: &'static str,
+}
+pub struct EVALApiArgs {
+    pub chunk_size: usize,
+}
 
- #[derive(Clone)]
-  pub struct ZenohCdn {
+#[derive(Clone)]
+pub struct ZenohCdn {
     pub zenoh: Arc<Zenoh>,
     upload_args: PUTApiArgs,
-    download_folders: GETApiFoldersArgs, 
-    download_bytes_args: GETApiChunksArgs
- }
+    download_folders: GETApiFoldersArgs,
+    download_bytes_args: GETApiChunksArgs,
+}
 
- impl Default for crate::PUTApiArgs {
-    fn default() -> Self { 
-       Self {
-           chunk_size: 65_000
-       }
-   }
+impl Default for crate::PUTApiArgs {
+    fn default() -> Self {
+        Self { chunk_size: 65_000 }
+    }
 }
 
 impl Default for crate::GETApiChunksArgs {
-   fn default() -> Self { 
-       Self {
-           index_start: 0,
-           index_end: 0,
-           chunk_index_start: 0,
-           chunk_index_end: 0
-      }
-  }
+    fn default() -> Self {
+        Self {
+            index_start: 0,
+            index_end: 0,
+            chunk_index_start: 0,
+            chunk_index_end: 0,
+        }
+    }
 }
 
 impl Default for crate::GETApiFoldersArgs {
-   fn default() -> Self { 
-       Self {
-           root_folder_final: "/tmp/final",
-           root_folder_chunks: "/tmp/chunks"
-      }
-  }
+    fn default() -> Self {
+        Self {
+            root_folder_final: "/tmp/final",
+            root_folder_chunks: "/tmp/chunks",
+        }
+    }
 }
 
 impl Default for crate::EVALApiArgs {
-   fn default() -> Self { 
-       Self {
-          chunk_size: 65_000
-      }
-  }
+    fn default() -> Self {
+        Self { chunk_size: 65_000 }
+    }
 }
 
 impl ZenohCdn {
-
     /// Creates a ZenohCDN object from an existing Zenoh session.
     pub async fn new(zenoh: Arc<Zenoh>) -> ZResult<ZenohCdn> {
         let upload_args = PUTApiArgs::default();
         let download_folders = GETApiFoldersArgs::default();
         let download_bytes_args = GETApiChunksArgs::default();
 
-        Ok(ZenohCdn {zenoh, upload_args, download_folders, download_bytes_args})
+        Ok(ZenohCdn {
+            zenoh,
+            upload_args,
+            download_folders,
+            download_bytes_args,
+        })
     }
 
     /// Creates a ZenohCDN object, starting a new Zenoh session.
@@ -118,7 +117,12 @@ impl ZenohCdn {
         let download_folders = GETApiFoldersArgs::default();
         let download_bytes_args = GETApiChunksArgs::default();
 
-        Ok(ZenohCdn {zenoh, upload_args, download_folders, download_bytes_args})
+        Ok(ZenohCdn {
+            zenoh,
+            upload_args,
+            download_folders,
+            download_bytes_args,
+        })
     }
 
     /// Returns Zenoh from Zenoh_cdn.
@@ -140,8 +144,11 @@ impl ZenohCdn {
     pub fn set_download_file_folder(&mut self, download_folder_final: &'static str) {
         let folders: &GETApiFoldersArgs = self.download_folders();
         let root_folder_final = download_folder_final;
-        let root_folder_chunks =  folders.root_folder_chunks;
-        self.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
+        let root_folder_chunks = folders.root_folder_chunks;
+        self.set_download_folders(GETApiFoldersArgs {
+            root_folder_final,
+            root_folder_chunks,
+        });
     }
 
     /// Set the zenoh cdn's folder where to download the file chunks to share.
@@ -149,7 +156,10 @@ impl ZenohCdn {
         let folders: &GETApiFoldersArgs = self.download_folders();
         let root_folder_final = folders.root_folder_final;
         let root_folder_chunks = download_folder_chunks;
-        self.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
+        self.set_download_folders(GETApiFoldersArgs {
+            root_folder_final,
+            root_folder_chunks,
+        });
     }
 
     /// Get a reference to the zenoh cdn's download bytes args.
@@ -176,21 +186,28 @@ impl ZenohCdn {
     pub async fn send(&self, path: String, value: String) -> Result<(), Box<dyn Error>> {
         let same_path = path.clone();
         let chunk_size: usize = check_put_args(&path, &value, self.upload_args)?;
-        
+
         let (filename, chunks_number) = self.share_file(path, value, chunk_size).await?;
         let selector = filename.clone();
-        
+
         println!("Chunk number: {}", chunks_number);
         let chunks_nums: Vec<usize> = (1..=chunks_number).collect();
         let tasks_abort = Vec::with_capacity(chunks_nums.len());
-        let t = self.start_evals(same_path, chunks_nums, chunk_size, tasks_abort).await;
-        
+        let t = self
+            .start_evals(same_path, chunks_nums, chunk_size, tasks_abort)
+            .await;
+
         //notify that I've shared a file with the pub api
         let workspace = self.zenoh.workspace(None).await.unwrap();
         let key = "New_file";
         let value_notification = format!("new file ready to be downloaded. Filename {}", filename);
-        info!("I notify that the {} file is ready to be downloaded.", filename);
-        workspace.put(&key.try_into()?, value_notification.into()).await?;
+        info!(
+            "I notify that the {} file is ready to be downloaded.",
+            filename
+        );
+        workspace
+            .put(&key.try_into()?, value_notification.into())
+            .await?;
 
         //listen if the file has been uploaded
         info!("I subscribe to selector <{}>.", selector);
@@ -209,21 +226,21 @@ impl ZenohCdn {
                     match change.value {
                         Some(s) => {
                             match s {
-                                Value::StringUtf8(msg) => 
+                                Value::StringUtf8(msg) =>
                                     if msg.to_uppercase() == MSG_FILE_RECEIVED {
                                         break;
                                     },
                                 _ => {
-                                        error!("Cannot read the data [StringUtf8 expected]."); 
+                                        error!("Cannot read the data [StringUtf8 expected].");
                                         return Err("Cannot read the data [StringUtf8 expected].".into())
                                     },
                             };
                         },
                         _ => {
-                                error!("Cannot read the change.value."); 
+                                error!("Cannot read the change.value.");
                                 return Err("Cannot read the change.value.".into())
                         },
-                    };                   
+                    };
                 }
             );
         }
@@ -233,7 +250,7 @@ impl ZenohCdn {
         Ok(())
     }
 
-    /// API to share a file. 
+    /// API to share a file.
     pub async fn upload(&self, path: String, value: String) -> Result<(), Box<dyn Error>> {
         let chunk_size: usize = check_put_args(&path, &value, self.upload_args)?;
         let (_filename, chunks_number) = self.share_file(path.clone(), value, chunk_size).await?;
@@ -242,26 +259,37 @@ impl ZenohCdn {
         Ok(())
     }
 
-    /// API to share a file, specifying the chunk size. 
-    pub async fn upload_extended(&self, path: String, value: String, chunk_size: usize) -> Result<(), Box<dyn Error>> {
+    /// API to share a file, specifying the chunk size.
+    pub async fn upload_extended(
+        &self,
+        path: String,
+        value: String,
+        chunk_size: usize,
+    ) -> Result<(), Box<dyn Error>> {
         let (_filename, chunks_number) = self.share_file(path.clone(), value, chunk_size).await?;
         let chunks_nums: Vec<usize> = (1..=chunks_number).collect();
         let tasks_abort = Vec::with_capacity(chunks_nums.len());
-        self.start_evals(path, chunks_nums, chunk_size, tasks_abort).await;
+        self.start_evals(path, chunks_nums, chunk_size, tasks_abort)
+            .await;
         Ok(())
     }
 
-    /// Base method to to share a file. 
-    async fn share_file(&self, path: String, value: String, chunk_size: usize) -> Result<(String, usize), Box<dyn Error>> {
+    /// Base method to to share a file.
+    async fn share_file(
+        &self,
+        path: String,
+        value: String,
+        chunk_size: usize,
+    ) -> Result<(String, usize), Box<dyn Error>> {
         info!("New workspace...");
         let workspace = self.zenoh.workspace(None).await?;
 
         info!("Value: {}", value);
         let file_metadata = match fs::metadata(&value) {
             Ok(metadata) => metadata,
-            Err(e) => { 
+            Err(e) => {
                 error!("Unable to read metadata from local file {}.", value);
-                return Err(e.into()); 
+                return Err(e.into());
             }
         };
         let file_size = file_metadata.len() as usize;
@@ -299,24 +327,41 @@ impl ZenohCdn {
             );
             info!("Selector: {}", metadata_path);
             info!("Size metadata: {}", metadata.len());
-            workspace.put(&metadata_path.try_into()?, metadata.into()).await?; 
+            workspace
+                .put(&metadata_path.try_into()?, metadata.into())
+                .await?;
         }
         Ok((filename, chunks_number))
     }
 
     /// The API to download a file.
-    pub async fn download(&self, selector: String, download_folder_final: &'static str) -> Result<String, Box<dyn Error>> {
+    pub async fn download(
+        &self,
+        selector: String,
+        download_folder_final: &'static str,
+    ) -> Result<String, Box<dyn Error>> {
         let folders: &GETApiFoldersArgs = self.download_folders();
         let root_folder_chunks = folders.root_folder_chunks;
         let mut root_folder_final = folders.root_folder_final;
         if !download_folder_final.is_empty() {
             root_folder_final = download_folder_final;
         }
-        self.retrieve_file(selector, root_folder_final, root_folder_chunks, self.download_bytes_args()).await
+        self.retrieve_file(
+            selector,
+            root_folder_final,
+            root_folder_chunks,
+            self.download_bytes_args(),
+        )
+        .await
     }
 
     /// The API to download a file, specifying the indexes
-    pub async fn download_extended(&self, selector: String, download_folder_final: &str, indexes: Option<&GETApiChunksArgs>) -> Result<String, Box<dyn Error + '_>> { 
+    pub async fn download_extended(
+        &self,
+        selector: String,
+        download_folder_final: &str,
+        indexes: Option<&GETApiChunksArgs>,
+    ) -> Result<String, Box<dyn Error + '_>> {
         let folders: &GETApiFoldersArgs = self.download_folders();
         let root_folder_chunks = folders.root_folder_chunks;
         let mut root_folder_final = folders.root_folder_final;
@@ -327,11 +372,18 @@ impl ZenohCdn {
             Some(element) => element,
             None => self.download_bytes_args(),
         };
-        self.retrieve_file(selector, root_folder_final, root_folder_chunks, i).await
+        self.retrieve_file(selector, root_folder_final, root_folder_chunks, i)
+            .await
     }
 
     /// Base method to retrieve a file.
-    async fn retrieve_file(&self, selector: String, root_folder_final: &str, root_folder_chunks: &str, indexes: &GETApiChunksArgs) -> Result<String, Box<dyn Error>> {
+    async fn retrieve_file(
+        &self,
+        selector: String,
+        root_folder_final: &str,
+        root_folder_chunks: &str,
+        indexes: &GETApiChunksArgs,
+    ) -> Result<String, Box<dyn Error>> {
         check_get_args(selector.clone())?;
 
         let index_start: usize = indexes.index_start;
@@ -360,14 +412,18 @@ impl ZenohCdn {
                 metadata = match data.value {
                     Value::StringUtf8(s) => s,
                     _ => {
-                            error!("Cannot read the data [StringUtf8 expected]."); 
-                            return Err("Cannot read the data [StringUtf8 expected].".into())
-                        },
+                        error!("Cannot read the data [StringUtf8 expected].");
+                        return Err("Cannot read the data [StringUtf8 expected].".into());
+                    }
                 };
             }
 
             if metadata.is_empty() {
-                return Err(std::io::Error::new(ErrorKind::NotFound, "Metadata information not found.").into());
+                return Err(std::io::Error::new(
+                    ErrorKind::NotFound,
+                    "Metadata information not found.",
+                )
+                .into());
             }
 
             let (size, checksum, chunks_number, chunk_size, filename) =
@@ -392,20 +448,19 @@ impl ZenohCdn {
                     "\nElaborating chunk number {}. Calling EVAL {}.",
                     chunk_num, chunk_selector
                 );
-                let mut data_stream = workspace
-                    .get(&chunk_selector.try_into()?).await?;
+                let mut data_stream = workspace.get(&chunk_selector.try_into()?).await?;
                 while let Some(data) = data_stream.next().await {
-                    let chunk_content: RBuf = match data.value.clone() {
+                    let chunk_content: ZBuf = match data.value.clone() {
                         Value::Raw(_, buff) => buff,
                         _ => {
-                                error!("Not the data expected [RBuff required]."); 
-                                return Err("Not the data expected [RBuff required].".into())
-                            },
+                            error!("Not the data expected [ZBuff required].");
+                            return Err("Not the data expected [ZBuff required].".into());
+                        }
                     };
                     let filename_num = format!("{}_{}", &filename, chunk_num);
                     let full_filename = format!("{}/{}", root_folder_chunks, filename_num);
                     write_mmap_file(&final_file, chunk_content.to_vec(), chunk_num, chunk_size);
-                    write_file(root_folder_chunks, chunk_content.to_vec(), full_filename)?;                
+                    write_file(root_folder_chunks, chunk_content.to_vec(), full_filename)?;
                 }
             }
             let count_chunks = chunk_end - chunk_start;
@@ -417,12 +472,16 @@ impl ZenohCdn {
                     info!("Checksum verified -> OK");
                 }
             } else {
-                warn!("{} chunks missing. Check them to recreate the whole file.", count_chunks);
+                warn!(
+                    "{} chunks missing. Check them to recreate the whole file.",
+                    count_chunks
+                );
             }
 
             let chunks_nums: Vec<_> = (chunk_start..=chunk_end).collect();
             let tasks_abort = Vec::with_capacity(chunks_nums.len());
-            self.start_evals(path.clone(), chunks_nums, chunk_size, tasks_abort).await;
+            self.start_evals(path.clone(), chunks_nums, chunk_size, tasks_abort)
+                .await;
         }
         Ok(path_to_return)
     }
@@ -442,12 +501,18 @@ impl ZenohCdn {
         }
     }
 
-    /// Method to run multiple, stoppable, async evals. 
-    async fn start_evals(&self, path: String, chunks_nums: Vec<usize>, chunk_size: usize, mut tasks_abort:Vec<AbortHandle>) -> Vec<AbortHandle> {
+    /// Method to run multiple, stoppable, async evals.
+    async fn start_evals(
+        &self,
+        path: String,
+        chunks_nums: Vec<usize>,
+        chunk_size: usize,
+        mut tasks_abort: Vec<AbortHandle>,
+    ) -> Vec<AbortHandle> {
         for n in chunks_nums.clone() {
             let (handle, registration) = AbortHandle::new_pair();
             tasks_abort.push(handle);
-    
+
             let zenoh = self.clone();
             let path_eval = path.to_string();
             let fut = async move {
@@ -455,48 +520,58 @@ impl ZenohCdn {
             };
             async_std::task::spawn(Abortable::new(fut, registration));
         }
-       tasks_abort
+        tasks_abort
     }
 
-    /// Method to stop multiple async evals. 
-    async fn stop_evals(&self, mut tasks_abort:Vec<AbortHandle>) -> Vec<AbortHandle> {
+    /// Method to stop multiple async evals.
+    async fn stop_evals(&self, mut tasks_abort: Vec<AbortHandle>) -> Vec<AbortHandle> {
         for handle in tasks_abort.drain(1..tasks_abort.len()) {
             handle.abort();
         }
         tasks_abort
     }
-    
+
     /// Method to call each evals.
     async fn eval(&self, path: String, chunk_number: usize, chunk_size: usize) {
         let eval_path = format!("{}/{}", path, chunk_number);
         info!("Running Eval {} on path {}", chunk_number, eval_path);
-        let _ = match self.run_eval_e2e(eval_path, EVALApiArgs{chunk_size}).await {
+        let _ = match self
+            .run_eval_e2e(eval_path, EVALApiArgs { chunk_size })
+            .await
+        {
             Ok(_) => info!("Finished Eval {}", chunk_number),
-            Err(e) => error!("Error during the Eval: {}.", e)
+            Err(e) => error!("Error during the Eval: {}.", e),
         };
     }
-    
+
     /// The API to retrieve bytes related the chunks
-    pub async fn run_eval_e2e(&self, path_str: String, args: EVALApiArgs) -> Result<(), Box<dyn Error>> {
+    pub async fn run_eval_e2e(
+        &self,
+        path_str: String,
+        args: EVALApiArgs,
+    ) -> Result<(), Box<dyn Error>> {
         let _ = env_logger::try_init();
-        
+
         let chunk_size: usize = check_eval_args(path_str.clone(), args)?;
         let path: zenoh::Path = zenoh::Path::try_from(path_str.clone())?;
         let path_expr = PathExpr::try_from(path_str.clone())?;
-    
+
         info!("New workspace...");
         let workspace = self.zenoh.workspace(None).await?;
-    
+
         info!("Register eval for {}'...\n", path_str);
         let mut get_stream = workspace.register_eval(&path_expr).await?;
         while let Some(get_request) = get_stream.next().await {
             let selector = get_request.selector.clone();
-            info!(">> [Eval listener] received get with selector: {}", selector);
+            info!(
+                ">> [Eval listener] received get with selector: {}",
+                selector
+            );
             let selector_to_split = format!("{}", selector);
             let selector_split: Vec<_> = selector_to_split.split('/').collect();
             let filename = selector_split[selector_split.len() - 2];
             let chunk_number = match selector_split[selector_split.len() - 1].parse::<usize>() {
-                Ok(chunk_number)  => chunk_number,
+                Ok(chunk_number) => chunk_number,
                 Err(e) => {
                     error!("Chunk number not a valid number: {}.", e);
                     return Err(e.into());
@@ -505,7 +580,7 @@ impl ZenohCdn {
 
             let chunk_bytes: Vec<u8> = get_bytes_from_file(filename, chunk_number, chunk_size);
             info!(r#"Replying to GET "{:02X?}""#, &chunk_bytes[0..100]);
-            get_request.reply(path.clone(), chunk_bytes.into()).await;
+            get_request.reply(path.clone(), chunk_bytes.into());
         }
         get_stream.close().await?;
         Ok(())
