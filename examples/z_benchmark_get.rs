@@ -27,7 +27,7 @@ async fn main() {
     println!("Preparing the parameters...");
     let mut config = Properties::default();
     config.insert("mode".to_string(), "peer".to_string());
-    config.insert("-l".to_string(), "tcp/127.0.0.1:7448".to_string()); 
+    config.insert("-l".to_string(), "tcp/127.0.0.1:7448".to_string());
     let path: String = "/demo/example/myfile".to_string();
     //let value: String = "~/Downloads/zenoh.png".to_string();
     let chunk_size: usize = 65_000;
@@ -36,12 +36,13 @@ async fn main() {
     let start = Instant::now();
 
     let mut zenoh_cdn = ZenohCdn::new_session(config)
-    .await
-    .map_err(|e: ZError| {
-        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
-            descr: format!("Error during creation of ZenohCdn: {}", e),
+        .await
+        .map_err(|e: ZError| {
+            zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+                descr: format!("Error during creation of ZenohCdn: {}", e),
+            })
         })
-    }).unwrap();
+        .unwrap();
 
     zenoh_cdn.set_download_folders(GETApiFoldersArgs::default());
     zenoh_cdn.set_download_bytes_args(GETApiChunksArgs::default());
@@ -55,7 +56,12 @@ async fn main() {
     call_func(zenoh, path, num, chunk_size).await;
 }
 
-async fn call_func(zenoh_cdn: Arc<ZenohCdn>, path_init: String, num: Vec<usize>, chunk_size: usize) {
+async fn call_func(
+    zenoh_cdn: Arc<ZenohCdn>,
+    path_init: String,
+    num: Vec<usize>,
+    chunk_size: usize,
+) {
     let mut tasks = Vec::with_capacity(num.len());
     println!("Creating the parallel tasks...");
     let start = Instant::now();
@@ -86,6 +92,6 @@ async fn func(zenoh_cdn: Arc<ZenohCdn>, path: String, chunk_number: usize, _chun
     println!("Path: {}", path);
     let _ = match zenoh_cdn.download(path, "").await {
         Ok(_) => println!("Finished Eval {}", chunk_number),
-        Err(e) => println!("Error during the Eval: {}.", e)
+        Err(e) => println!("Error during the Eval: {}.", e),
     };
 }

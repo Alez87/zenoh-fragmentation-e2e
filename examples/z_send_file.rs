@@ -14,9 +14,9 @@
 
 extern crate fragmentation_e2e;
 
-use fragmentation_e2e::ZenohCdn;
 use clap::{App, Arg};
-use fragmentation_e2e::{PUTApiArgs};
+use fragmentation_e2e::PUTApiArgs;
+use fragmentation_e2e::ZenohCdn;
 use zenoh::{Properties, ZError};
 
 #[async_std::main]
@@ -27,18 +27,19 @@ async fn main() {
     println!("Calling the PUT API to share the file...");
 
     let mut zenoh_cdn = ZenohCdn::new_session(config)
-    .await
-    .map_err(|e: ZError| {
-        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
-            descr: format!("Error during creation of ZenohCdn: {}", e),
+        .await
+        .map_err(|e: ZError| {
+            zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+                descr: format!("Error during creation of ZenohCdn: {}", e),
+            })
         })
-    }).unwrap();
+        .unwrap();
 
-    zenoh_cdn.set_upload_args(PUTApiArgs{chunk_size});
+    zenoh_cdn.set_upload_args(PUTApiArgs { chunk_size });
 
     let res: String = match zenoh_cdn.send(path, value).await {
         Ok(_) => String::from("Finished to share the file."),
-        Err(e) => format!("Error during the Put: {:?}.", e)
+        Err(e) => format!("Error during the Put: {:?}.", e),
     };
     println!("{}", res);
 }

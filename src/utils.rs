@@ -13,22 +13,22 @@
 //
 
 use crate::{EVALApiArgs, PUTApiArgs};
-use std::{fs, io::ErrorKind};
+use log::{error, info, warn};
+use memmap::MmapOptions;
+use std::fs::create_dir_all;
 use std::fs::File;
 use std::path::Path;
 use std::str;
 use std::{
+    error::Error,
+    io::{Read, Write},
+    u64,
+};
+use std::{fs, io::ErrorKind};
+use std::{
     fs::OpenOptions,
     io::{Seek, SeekFrom},
 };
-use std::{
-    io::{Read, Write},
-    u64,
-    error::Error,
-};
-use std::fs::create_dir_all;
-use log::{info, warn, error};
-use memmap::MmapOptions;
 
 const ROOT_FOLDER: &str = "/tmp";
 
@@ -40,7 +40,9 @@ pub fn check_put_args(path: &str, value: &str, args: PUTApiArgs) -> Result<usize
         return Err(std::io::Error::new(ErrorKind::InvalidInput, "Value is empty.").into());
     }
     if args.chunk_size < 1000 {
-        return Err(std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size: too small.").into());
+        return Err(
+            std::io::Error::new(ErrorKind::InvalidInput, "Wrong chunk size: too small.").into(),
+        );
     }
     Ok(args.chunk_size)
 }
@@ -61,7 +63,6 @@ pub fn check_eval_args(path_str: String, args: EVALApiArgs) -> Result<usize, Box
     }
     Ok(args.chunk_size)
 }
-
 
 pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usize) -> Vec<u8> {
     let full_filename = format!("{}/{}", ROOT_FOLDER, filename);
@@ -93,7 +94,7 @@ pub fn get_bytes_from_file(filename: &str, chunk_number: usize, chunk_size: usiz
 }
 
 #[allow(clippy::type_complexity)]
-pub fn get_metadata_info (
+pub fn get_metadata_info(
     metadata: String,
     old_selector: String,
 ) -> Result<(usize, String, usize, usize, String), Box<dyn Error>> {
@@ -110,32 +111,32 @@ pub fn get_metadata_info (
         Ok(s) => {
             info!("File size: {}", s);
             s
-        },
+        }
         Err(e) => {
             error!("Cannot find the file size.");
-            return Err(e.into())
+            return Err(e.into());
         }
     };
-    
+
     let checksum: String = match metadata_checksum[1].parse::<String>() {
         Ok(s) => {
             info!("File size: {}", s);
             s
-        },
+        }
         Err(e) => {
             error!("Cannot find the file size.");
-            return Err(e.into())
+            return Err(e.into());
         }
     };
-    
+
     let chunks_number: usize = match metadata_chunks_number[1].parse::<usize>() {
         Ok(s) => {
             info!("Chunks number: {}", s);
             s
-        },
+        }
         Err(e) => {
             error!("Cannot find the number of chunks.");
-            return Err(e.into())
+            return Err(e.into());
         }
     };
 
@@ -143,10 +144,10 @@ pub fn get_metadata_info (
         Ok(s) => {
             info!("Chunks size: {}", s);
             s
-        },
+        }
         Err(e) => {
             error!("Cannot find the size of the chunks.");
-            return Err(e.into())
+            return Err(e.into());
         }
     };
 
@@ -155,7 +156,6 @@ pub fn get_metadata_info (
 
     Ok((size, checksum, chunks_number, chunk_size, filename))
 }
-
 
 pub fn get_chunks_interval(
     chunks_number: usize,
@@ -198,30 +198,36 @@ pub fn get_chunks_interval(
     Ok((chunk_start, chunk_end))
 }
 
-pub fn create_mmap_file(path: String, root_folder_final: &str, size: u64) -> Result<File, Box<dyn Error>> {
+pub fn create_mmap_file(
+    path: String,
+    root_folder_final: &str,
+    size: u64,
+) -> Result<File, Box<dyn Error>> {
     let mut f = match OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open(path.clone()) {
-            Ok(f) => f,
-            Err(_) => {
-                warn!("Cannot create the file {}.", path);
-                warn!("Checking if the folder {} exists.", root_folder_final);
-                create_dir_all(&root_folder_final)?;
-                info!("Created the folder {}.", root_folder_final);
-                match OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(path.clone()) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        error!("Cannot create, again, the file {}.", path);
-                        return Err(e.into());
-                    }
+        .open(path.clone())
+    {
+        Ok(f) => f,
+        Err(_) => {
+            warn!("Cannot create the file {}.", path);
+            warn!("Checking if the folder {} exists.", root_folder_final);
+            create_dir_all(&root_folder_final)?;
+            info!("Created the folder {}.", root_folder_final);
+            match OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(path.clone())
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    error!("Cannot create, again, the file {}.", path);
+                    return Err(e.into());
                 }
             }
+        }
     };
 
     // Allocate space in the file first
@@ -230,7 +236,6 @@ pub fn create_mmap_file(path: String, root_folder_final: &str, size: u64) -> Res
     f.seek(SeekFrom::Start(0))?;
     Ok(f)
 }
-
 
 pub fn write_mmap_file(f: &File, src: Vec<u8>, chunk_num: usize, chunk_size: usize) {
     let mut data = unsafe {
@@ -246,9 +251,12 @@ pub fn write_mmap_file(f: &File, src: Vec<u8>, chunk_num: usize, chunk_size: usi
     );
     data[initial_position..final_position].copy_from_slice(&src);
 }
-    
 
-pub fn write_file(root_folder_chunks: &str, all_bytes: Vec<u8>, filename: String) -> Result<(), Box<dyn Error>> {
+pub fn write_file(
+    root_folder_chunks: &str,
+    all_bytes: Vec<u8>,
+    filename: String,
+) -> Result<(), Box<dyn Error>> {
     let mut f = match File::create(filename.clone()) {
         Ok(f) => f,
         Err(_) => {

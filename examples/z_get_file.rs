@@ -16,14 +16,21 @@ extern crate fragmentation_e2e;
 
 use clap::{App, Arg};
 use fragmentation_e2e::{GETApiChunksArgs, GETApiFoldersArgs, ZenohCdn};
-use zenoh::{Properties, ZError};
 use std::time::Instant;
+use zenoh::{Properties, ZError};
 
 #[async_std::main]
 async fn main() {
     env_logger::init();
-    let (config, selector, _root_folder, index_start, index_end, chunk_index_start, chunk_index_end) =
-        parse_args();
+    let (
+        config,
+        selector,
+        _root_folder,
+        index_start,
+        index_end,
+        chunk_index_start,
+        chunk_index_end,
+    ) = parse_args();
 
     let root_folder_final: &str = "/tmp/final";
     let root_folder_chunks: &str = "/tmp/chunks";
@@ -31,23 +38,35 @@ async fn main() {
     let start = Instant::now();
 
     let mut zenoh_cdn = ZenohCdn::new_session(config)
-    .await
-    .map_err(|e: ZError| {
-        zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
-            descr: format!("Error during creation of ZenohCdn: {}", e),
+        .await
+        .map_err(|e: ZError| {
+            zenoh_util::zerror2!(zenoh::ZErrorKind::InvalidSession {
+                descr: format!("Error during creation of ZenohCdn: {}", e),
+            })
         })
-    }).unwrap();
+        .unwrap();
 
     let creation_time = start.elapsed().as_micros();
     println!("ZenohCDN creation: {}us", creation_time);
-    
-    zenoh_cdn.set_download_folders(GETApiFoldersArgs{root_folder_final, root_folder_chunks});
-    zenoh_cdn.set_download_bytes_args(GETApiChunksArgs{index_start, index_end, chunk_index_start, chunk_index_end});
-    
+
+    zenoh_cdn.set_download_folders(GETApiFoldersArgs {
+        root_folder_final,
+        root_folder_chunks,
+    });
+    zenoh_cdn.set_download_bytes_args(GETApiChunksArgs {
+        index_start,
+        index_end,
+        chunk_index_start,
+        chunk_index_end,
+    });
+
     println!("Calling the GET API to retrieve the file...");
     let res: String = match zenoh_cdn.download(selector, "").await {
-        Ok(path) => format!("Finished to retrieve the file. The downloaded file is: {}", path),
-        Err(e) => format!("Error during the Get: {:?}.", e)
+        Ok(path) => format!(
+            "Finished to retrieve the file. The downloaded file is: {}",
+            path
+        ),
+        Err(e) => format!("Error during the Get: {:?}.", e),
     };
 
     let creation_time = start.elapsed().as_micros();
@@ -110,10 +129,26 @@ fn parse_args() -> (Properties, String, String, usize, usize, usize, usize) {
 
     let selector = args.value_of("selector").unwrap().to_string();
     let root_folder = args.value_of("root_folder").unwrap().to_string();
-    let index_start = args.value_of("index_start").unwrap().parse::<usize>().unwrap();
-    let index_end = args.value_of("index_end").unwrap().parse::<usize>().unwrap();
-    let chunk_start = args.value_of("chunk_start").unwrap().parse::<usize>().unwrap();
-    let chunk_end = args.value_of("chunk_end").unwrap().parse::<usize>().unwrap();
+    let index_start = args
+        .value_of("index_start")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let index_end = args
+        .value_of("index_end")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let chunk_start = args
+        .value_of("chunk_start")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let chunk_end = args
+        .value_of("chunk_end")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
 
     (
         config,
